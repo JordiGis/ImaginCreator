@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+*.local
+.DS_Store
+img_output/
+
+# Keep gitignored dirs but not their content
+img_output/*.png
