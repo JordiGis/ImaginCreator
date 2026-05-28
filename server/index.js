@@ -11,6 +11,26 @@ import { saveImage, getAllImages, getStats, updateCost, serveImage } from './ser
 import { getModel, getAllModels, checkPromptCache } from './services/cache.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+// Load .env file (zero-dep loader)
+const envPath = path.resolve(process.cwd(), '.env')
+if (fs.existsSync(envPath)) {
+  const lines = fs.readFileSync(envPath, 'utf-8').split('\n')
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+    const eqIdx = trimmed.indexOf('=')
+    if (eqIdx === -1) continue
+    const k = trimmed.slice(0, eqIdx).trim()
+    let v = trimmed.slice(eqIdx + 1).trim()
+    // Strip quotes
+    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+      v = v.slice(1, -1)
+    }
+    if (!process.env[k]) process.env[k] = v
+  }
+}
+
 const KEY = process.env.OPENROUTER_API_KEY || process.env.UPSTREAM_KEY
 const PORT = parseInt(process.env.PORT || '3030', 10)
 const DAILY_LIMIT = parseFloat(process.env.DAILY_LIMIT_USD || '0')

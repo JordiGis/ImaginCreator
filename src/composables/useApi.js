@@ -11,7 +11,13 @@ export function useApi() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt, modelKey })
       })
-      const data = await res.json()
+      const text = await res.text()
+      let data
+      try {
+        data = JSON.parse(text)
+      } catch {
+        throw new Error(text || `Error ${res.status}: servidor no disponible`)
+      }
       if (!res.ok) throw new Error(data.error || `Error ${res.status}`)
       return data
     } finally {

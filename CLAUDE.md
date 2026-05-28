@@ -11,14 +11,14 @@ ImaginCreator — image generation dashboard using OpenRouter API (Flux / Stable
 ## Commands
 
 ```bash
-# Start the full app (backend + Vite dev server)
-# Terminal 1 — backend
-OPENROUTER_API_KEY=sk-or-v1-... node server/index.js
+# Start both backend + frontend (single command)
+OPENROUTER_API_KEY=sk-or-v1-... pnpm run dev
 
-# Terminal 2 — frontend (Vite dev server, proxies /api → backend)
-pnpm run dev:frontend
+# Or separately:
+OPENROUTER_API_KEY=sk-or-v1-... pnpm run dev:backend   # backend only
+pnpm run dev:frontend  # Vite dev server (proxies /api → backend)
 
-# Or build frontend for production and serve from backend
+# Build frontend for production and serve from backend
 pnpm run build
 OPENROUTER_API_KEY=sk-or-v1-... node server/index.js
 
