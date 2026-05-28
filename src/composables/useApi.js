@@ -3,13 +3,13 @@ import { ref } from 'vue'
 const generating = ref(false)
 
 export function useApi() {
-  async function generateImage(prompt, modelKey) {
+  async function generateImage(prompt, modelKey, images = []) {
     generating.value = true
     try {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, modelKey })
+        body: JSON.stringify({ prompt, modelKey, images })
       })
       const text = await res.text()
       let data

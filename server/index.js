@@ -97,23 +97,26 @@ async function handleRequest(req, res) {
   // POST /api/generate — generate image
   if (method === 'POST' && url.pathname === '/api/generate') {
     try {
-      const { prompt, modelKey } = await parseBody(req)
-      if (!prompt || !prompt.trim()) return json(res, 400, { error: 'Prompt required' })
+      const { prompt, modelKey, images } = await parseBody(req)
+      const hasImages = Array.isArray(images) && images.length
+      if ((!prompt || !prompt.trim()) && !hasImages) return json(res, 400, { error: 'Prompt or image required' })
 
       const model = getModel(modelKey)
 
-      // Check cache first (credit optimization!)
-      const cached = checkPromptCache(prompt, modelKey)
-      if (cached.hit) {
-        // Return cached result — no API call
-        return json(res, 200, {
-          images: [{ file: `${cached.hash}.png`, dataUrl: cached.dataUrl }],
-          text: '(cached)',
-          model: model.label,
-          cost: '0.0000',
-          cached: true,
-          usage: { prompt: 0, output: 0 }
-        })
+      // Check cache first (credit optimization!) — skip if images attached
+      if (!hasImages) {
+        const cached = checkPromptCache(prompt, modelKey)
+        if (cached.hit) {
+          // Return cached result — no API call
+          return json(res, 200, {
+            images: [{ file: `${cached.hash}.png`, dataUrl: cached.dataUrl }],
+            text: '(cached)',
+            model: model.label,
+            cost: '0.0000',
+            cached: true,
+            usage: { prompt: 0, output: 0 }
+          })
+        }
       }
 
       // Check daily/weekly limits
@@ -125,12 +128,24 @@ async function handleRequest(req, res) {
         }
       }
 
-      // Call OpenRouter
+      // Build user message content
+      let userContent = prompt || ''
+      if (hasImages) {
+        // Multimodal format — array for text + images (image gen models with vision support)
+        userContent = [{ type: 'text', text: prompt || '' }]
+        for (const img of images.slice(0, 4)) {
+          userContent.push({ type: 'image_url', image_url: { url: img } })
+        }
+      }
+
+      // Call OpenRouter — newer models need modalities: ["image"]
       const result = await callApi({
         model: model.id,
         messages: [
-          { role: 'user', content: prompt }
+          { role: 'user', content: userContent }
         ],
+        modalities: ['image'],
+        maxTokens: model.maxTokens,
         apiKey: KEY
       })
 
@@ -160,7 +175,8 @@ async function handleRequest(req, res) {
         cached: false
       })
     } catch (e) {
-      return json(res, 500, { error: e.message || String(e) })
+      console.error('❌ Generate error:', e)
+      return json(res, 500, { error: String(e) })
     }
   }
 
