@@ -1,10 +1,8 @@
 <template>
   <Teleport to="body">
-    <div v-if="show" class="modal-overlay" @click.self="$emit('close')">
-      <div class="modal-content">
-        <button class="close-btn" @click="$emit('close')">✕</button>
-        <img :src="src" alt="Full size preview" />
-      </div>
+    <div v-if="show" class="lightbox-overlay open" @click.self="$emit('close')">
+      <button class="close-lb" @click="$emit('close')">✕</button>
+      <img :src="src" alt="Vista ampliada" />
     </div>
   </Teleport>
 </template>
@@ -19,57 +17,40 @@ defineEmits(['close'])
 </script>
 
 <style scoped>
-.modal-overlay {
+.lightbox-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.9);
+  background: rgba(0,0,0,0.92);
+  z-index: 9999;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
-  cursor: pointer;
-  padding: 40px;
-  animation: fadeIn 0.15s ease;
+  cursor: zoom-out;
 }
 
-.modal-content {
-  position: relative;
-  max-width: 95vw;
-  max-height: 95vh;
-  cursor: default;
-}
-
-.modal-content img {
-  max-width: 100%;
+.lightbox-overlay img {
+  max-width: 90vw;
   max-height: 90vh;
-  border-radius: 8px;
-  box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+  object-fit: contain;
+  border-radius: 4px;
+  box-shadow: 0 0 80px rgba(0,0,0,0.6);
 }
 
-.close-btn {
-  position: absolute;
-  top: -36px;
-  right: 0;
-  background: rgba(255,255,255,0.1);
-  color: #fff;
+.close-lb {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  background: none;
   border: none;
-  border-radius: 50%;
-  width: 32px;
-  height: 32px;
-  font-size: 16px;
+  color: #fff;
+  font-size: 32px;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.15s;
+  opacity: 0.7;
+  transition: opacity 0.1s;
+  z-index: 1;
+  font-family: inherit;
+  line-height: 1;
 }
 
-.close-btn:hover {
-  background: rgba(255,255,255,0.2);
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
+.close-lb:hover { opacity: 1; }
 </style>

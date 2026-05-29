@@ -1,133 +1,155 @@
 <template>
-  <div class="app-layout">
-    <!-- Sidebar -->
+  <div class="app">
+    <!-- ===== Sidebar ===== -->
     <aside class="sidebar">
-      <div class="sidebar-inner">
-        <div class="sidebar-header">
-          <h1>ImaginCreator</h1>
-          <p class="subtitle">Generación con IA</p>
-        </div>
+      <div class="sidebar-logo">
+        <svg viewBox="0 0 32 32" fill="none">
+          <rect width="32" height="32" rx="8" fill="var(--accent)" opacity="0.2"/>
+          <path d="M10 20L16 10l6 10H10z" fill="var(--accent)"/>
+        </svg>
+        <h1>ImaginCreator</h1>
+      </div>
 
-        <div class="sidebar-actions">
-          <button
-            :class="['sidebar-btn', { primary: viewMode === 'chat' }]"
-            @click="viewMode = 'chat'"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            Chat
-          </button>
-          <button
-            :class="['sidebar-btn', { primary: viewMode === 'character' }]"
-            @click="viewMode = 'character'"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            Creador Personajes
-          </button>
-          <button class="sidebar-btn" @click="showGallery = true">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-            Galería
-          </button>
-        </div>
+      <nav class="nav-tabs" role="tablist">
+        <button
+          :class="['nav-tab', { active: viewMode === 'chat' }]"
+          role="tab"
+          :aria-selected="viewMode === 'chat'"
+          @click="viewMode = 'chat'"
+        >
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 3h14a2 2 0 012 2v10a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2z"/></svg>
+          <span>Chat</span>
+        </button>
+        <button
+          :class="['nav-tab', { active: viewMode === 'character' }]"
+          role="tab"
+          :aria-selected="viewMode === 'character'"
+          @click="viewMode = 'character'"
+        >
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="10" cy="7" r="3"/><path d="M3 17c0-4 3.13-6 7-6s7 2 7 6"/></svg>
+          <span>Personajes</span>
+        </button>
+        <button
+          :class="['nav-tab', { active: viewMode === 'gallery' }]"
+          role="tab"
+          :aria-selected="viewMode === 'gallery'"
+          @click="viewMode = 'gallery'"
+        >
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="2" width="6" height="6"/><rect x="12" y="2" width="6" height="6"/><rect x="2" y="12" width="6" height="6"/><rect x="12" y="12" width="6" height="6"/></svg>
+          <span>Galería</span>
+        </button>
+      </nav>
 
-        <div class="sidebar-section">
-          <label class="section-label">Modelo activo</label>
-          <ModelSelector :model-value="currentModel" @update:model-value="setModel" />
-        </div>
+      <ModelSelector :model-value="currentModel" @update:model-value="setModel" />
 
-        <div class="sidebar-section">
-          <CostDashboard
-            :total-cost="credit.totalCost.value"
-            :total-tokens="credit.totalTokens.value"
-            :total-images="credit.totalImages.value"
-            :daily-remaining="credit.dailyRemaining.value"
-            :weekly-remaining="credit.weeklyRemaining.value"
-          />
-        </div>
+      <CostDashboard
+        :total-cost="credit.totalCost.value"
+        :total-tokens="credit.totalTokens.value"
+        :total-images="credit.totalImages.value"
+        :daily-remaining="credit.dailyRemaining.value"
+        :weekly-remaining="credit.weeklyRemaining.value"
+        :daily-limit="credit.dailyLimit.value"
+        :weekly-limit="credit.weeklyLimit.value"
+      />
 
-        <div class="sidebar-footer">
-          <p class="hint">Prompts idénticos usan caché — sin coste</p>
-        </div>
+      <div class="sidebar-footer">
+        Prompts idénticos cargan desde caché y son gratuitos.
       </div>
     </aside>
 
-    <!-- Character Creator view -->
-    <main v-if="viewMode === 'character'" class="main">
-      <CharacterConfigurator
-        @send-to-chat="handleCharacterToChat"
-        @open-gallery="showGallery = true"
-      />
-    </main>
+    <!-- ===== Main content ===== -->
+    <main class="main">
 
-    <!-- Main chat -->
-    <main v-else class="main">
-      <div class="chat" ref="chatRef">
-        <TransitionGroup name="msg" tag="div" class="msg-list">
-          <div v-if="!hasMessages()" key="empty" class="empty-state">
-            <div class="empty-icon">
-              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" opacity="0.4">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
-                <path d="M12 6v6l4 2"/>
-              </svg>
+      <!-- ===== Chat view ===== -->
+      <div v-if="viewMode === 'chat'" class="view-container active">
+        <div class="chat-header">
+          <h2>Chat</h2>
+          <button class="new-chat-btn" @click="handleNewChat">+ Nuevo chat</button>
+        </div>
+
+        <div class="chat-messages" ref="chatRef">
+          <!-- Empty state -->
+          <div v-if="!hasMessages()" class="empty-state">
+            <svg viewBox="0 0 60 60" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="10" y="10" width="40" height="40" rx="8"></rect>
+              <circle cx="30" cy="28" r="8"></circle>
+              <path d="M18 44l6-12 8 8 8-16 8 20"></path>
+            </svg>
+            <h2>¿Qué quieres crear hoy?</h2>
+            <div class="suggestions">
+              <span
+                v-for="s in suggestions"
+                :key="s"
+                class="suggestion-chip"
+                @click="useSuggestion(s)"
+              >{{ s }}</span>
             </div>
-            <h2>¿Qué quieres crear?</h2>
-            <p>Describe una imagen y la IA la generará al instante.</p>
-            <p class="hint">Ej: "un gato astronauta en el espacio, estilo cyberpunk"</p>
           </div>
 
+          <!-- Messages -->
           <div
-            v-for="(msg, i) in messages"
-            :key="msg._id || i"
-            :class="['message', msg.role]"
+            v-for="msg in messages"
+            :key="msg._id"
+            :class="['message', msg.role === 'user' ? 'user' : 'ai']"
           >
-            <div class="bubble">
-              <p>{{ msg.text || '(imagen generada)' }}</p>
+            <div class="message-bubble">
+              <div class="text">{{ msg.text }}</div>
+              <div v-if="msg.images && msg.images.length" class="image-previews">
+                <img
+                  v-for="(img, j) in msg.images"
+                  :key="j"
+                  :src="img.dataUrl || `/img/${img.file}`"
+                  :alt="`Image ${j + 1}`"
+                  @click="openModal(img.dataUrl || `/img/${img.file}`)"
+                />
+              </div>
             </div>
-            <div v-if="msg.images && msg.images.length" class="image-row">
-              <img
-                v-for="(img, j) in msg.images"
-                :key="j"
-                :src="img.dataUrl || `/img/${img.file}`"
-                :alt="`Image ${j + 1}`"
-                class="thumb"
-                @click="openModal(img.dataUrl || `/img/${img.file}`)"
-              />
-            </div>
-            <div v-if="msg.info" class="msg-info">
-              <span class="model-tag">{{ msg.info.model }}</span>
-              <span class="sep">·</span>
-              <span :class="['cost-tag', { free: msg.info.cached }]">
-                {{ msg.info.cached ? 'Caché' : `$${msg.info.cost}` }}
-              </span>
-              <span class="sep">·</span>
-              <span class="tokens">{{ msg.info.tokens }} tokens</span>
+            <div v-if="msg.role === 'assistant'" class="message-meta">
+              <span v-if="msg.info">{{ msg.info.model }}</span>
+              <span v-if="msg.info">·</span>
+              <span v-if="msg.info && msg.info.cached" class="cache-badge">🆓 Caché</span>
+              <span v-if="msg.info && !msg.info.cached">${{ msg.info.cost }}</span>
+              <span v-if="msg.info">· {{ msg.info.tokens }} tokens</span>
             </div>
           </div>
-        </TransitionGroup>
 
-        <div v-if="api.generating.value" class="message assistant">
-          <div class="bubble generating">
-            <span class="spinner"></span>
-            Generando...
+          <!-- Generating indicator -->
+          <div v-if="api.generating.value" class="message ai">
+            <div class="message-bubble">
+              <div class="generating">
+                <div class="spinner"></div>
+                <span>Generando...</span>
+              </div>
+            </div>
           </div>
         </div>
+
+        <PromptInput
+          :disabled="api.generating.value"
+          :estimated-cost="credit.estimatedCost(currentModel)"
+          :model-key="currentModel"
+          @send="handleSend"
+          @update:model-key="setModel"
+        />
       </div>
 
-      <div class="model-context">
-        <span class="ctx-badge">{{ getModel(currentModel).label }}</span>
-        <span class="ctx-cost">${{ getModel(currentModel).cost.toFixed(3) }}/img</span>
+      <!-- ===== Character Creator view ===== -->
+      <div v-if="viewMode === 'character'" class="view-container active">
+        <CharacterConfigurator
+          @send-to-chat="handleCharacterToChat"
+          @open-gallery="viewMode = 'gallery'"
+        />
       </div>
 
-      <PromptInput
-        :disabled="api.generating.value"
-        :estimated-cost="credit.estimatedCost(currentModel)"
-        :model-key="currentModel"
-        @send="handleSend"
-      />
+      <!-- ===== Gallery view ===== -->
+      <div v-if="viewMode === 'gallery'" class="view-container active">
+        <ImageGallery :show="viewMode === 'gallery'" @preview="openModal" />
+      </div>
+
     </main>
 
-    <!-- Modals -->
+    <!-- ===== Lightbox ===== -->
     <ImageModal :src="modalSrc" :show="modalOpen" @close="modalOpen = false" />
-    <ImageGallery :show="showGallery" @close="showGallery = false" @preview="openModal" />
   </div>
 </template>
 
@@ -160,18 +182,32 @@ const {
 
 const modalSrc = ref('')
 const modalOpen = ref(false)
-const showGallery = ref(false)
 const chatRef = ref(null)
 
 let msgCounter = 0
+
+const suggestions = [
+  'un gato astronauta en el espacio, estilo cyberpunk',
+  'retrato de un elfo guerrero con armadura dorada',
+  'paisaje surrealista con ríos de lava',
+  'logo minimalista para startup de IA',
+]
 
 function openModal(src) {
   modalSrc.value = src
   modalOpen.value = true
 }
 
+function useSuggestion(text) {
+  // Fill prompt and immediately send
+  handleSend({ prompt: text, images: [] })
+}
+
+function handleNewChat() {
+  newChat()
+}
+
 async function handleSend({ prompt, images }) {
-  // Unique key for transition
   const userKey = ++msgCounter
 
   addMessage({
@@ -210,7 +246,6 @@ async function handleSend({ prompt, images }) {
     })
   }
 
-  // Scroll to bottom after render
   setTimeout(() => {
     if (chatRef.value) {
       chatRef.value.scrollTop = chatRef.value.scrollHeight
@@ -219,7 +254,6 @@ async function handleSend({ prompt, images }) {
 }
 
 function handleCharacterToChat(charResult) {
-  // Switch to chat view and add character result as a message
   viewMode.value = 'chat'
   setModel('recraft-v41')
   const aiKey = ++msgCounter
@@ -256,443 +290,372 @@ onMounted(() => {
 </script>
 
 <style>
-/* ── Reset & base ── */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
+/* ── Design tokens ── */
 :root {
-  --bg-deep: #08080e;
-  --bg-primary: #0c0c18;
-  --bg-secondary: #12121e;
-  --bg-tertiary: #1a1a2e;
-  --bg-elevated: #22223a;
-  --border: #282840;
-  --border-light: #383858;
-  --text-primary: #eeeef8;
-  --text-secondary: #9494b8;
-  --text-muted: #55557a;
-  --accent: #7c5cfc;
-  --accent-hover: #6b4be6;
-  --accent-bg: #1e1660;
-  --accent-glow: rgba(124, 92, 252, 0.15);
-  --green: #00d4aa;
-  --green-bg: #0a2a22;
-  --green-glow: rgba(0, 212, 170, 0.12);
-  --gradient: linear-gradient(135deg, #7c5cfc, #9470ff);
-  --sidebar-width: 290px;
-  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --bg-deep: #0b0b0f;
+  --surface: #14141a;
+  --surface-2: #1a1a22;
+  --border: #2a2a35;
+  --fg: #e8e8ed;
+  --muted: #8a8a96;
+  --accent: #4f8cff;
+  --accent-hover: #6ba0ff;
+  --accent-subtle: rgba(79,140,255,0.12);
+  --success: #00c853;
+  --success-bg: rgba(0,200,83,0.1);
+  --radius: 8px;
+  --radius-sm: 6px;
+  --font: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', monospace;
+  --sidebar-width: 280px;
 }
 
-html,
-body {
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
   height: 100%;
-  font-family: var(--font);
   background: var(--bg-deep);
-  color: var(--text-primary);
+  color: var(--fg);
+  font: 14px/1.5 var(--font);
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
-#app {
-  height: 100%;
-}
+#app { height: 100%; }
 
 /* ── Layout ── */
-.app-layout {
+.app {
   display: flex;
-  height: 100%;
+  height: 100vh;
+  overflow: hidden;
 }
 
 /* ── Sidebar ── */
 .sidebar {
   width: var(--sidebar-width);
-  background: var(--bg-secondary);
+  min-width: var(--sidebar-width);
+  background: var(--surface);
   border-right: 1px solid var(--border);
-  flex-shrink: 0;
-  position: relative;
-  overflow: hidden;
-}
-
-/* Top accent line */
-.sidebar::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: var(--gradient);
-}
-
-.sidebar-inner {
+  display: flex;
+  flex-direction: column;
   padding: 20px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  height: 100%;
   overflow-y: auto;
+  z-index: 10;
 }
 
-.sidebar-header h1 {
-  font-size: 18px;
-  font-weight: 800;
-  letter-spacing: -0.3px;
-  background: var(--gradient);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.subtitle {
-  font-size: 11px;
-  color: var(--text-muted);
-  margin-top: 1px;
-  letter-spacing: 0.3px;
-  text-transform: uppercase;
-  font-weight: 500;
-}
-
-.sidebar-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.sidebar-btn {
+.sidebar-logo {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: 100%;
-  padding: 10px 14px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  color: var(--text-primary);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  font-family: inherit;
+  margin-bottom: 28px;
+  padding-left: 4px;
 }
 
-.sidebar-btn:hover {
-  border-color: var(--accent);
-  background: var(--accent-bg);
-  box-shadow: 0 0 20px var(--accent-glow);
+.sidebar-logo svg {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
 }
 
-.sidebar-btn.primary {
-  background: var(--accent-bg);
-  border-color: #3a28a0;
-  color: var(--accent);
+.sidebar-logo h1 {
+  font-size: 18px;
   font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--fg);
 }
 
-.sidebar-btn.primary:hover {
-  background: #2a1e80;
-  border-color: var(--accent);
-  box-shadow: 0 0 24px var(--accent-glow);
-}
-
-.sidebar-section {
+/* ── Nav Tabs ── */
+.nav-tabs {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 2px;
+  margin-bottom: 24px;
 }
 
-.section-label {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: var(--text-muted);
-  font-weight: 600;
+.nav-tab {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  background: none;
+  border: none;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  width: 100%;
 }
 
+.nav-tab:hover { background: var(--surface-2); color: var(--fg); }
+.nav-tab.active {
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.nav-tab svg {
+  width: 20px; height: 20px;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+.nav-tab.active svg { opacity: 1; }
+
+/* ── Sidebar Footer ── */
 .sidebar-footer {
   margin-top: auto;
   padding-top: 16px;
   border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.4;
 }
 
-.hint {
-  font-size: 11px;
-  color: var(--text-muted);
-  line-height: 1.5;
-}
-
-/* ── Main chat ── */
+/* ── Main content ── */
 .main {
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-width: 0;
-  background: var(--bg-primary);
-  position: relative;
+  overflow: hidden;
+  background: var(--bg-deep);
 }
 
-/* Subtle grid background */
-.main::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: radial-gradient(circle at 1px 1px, var(--border) 1px, transparent 0);
-  background-size: 32px 32px;
-  opacity: 0.3;
-  pointer-events: none;
+.view-container {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 
-.chat {
+/* ── Chat view ── */
+.chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 32px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+  z-index: 2;
+}
+
+.chat-header h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.new-chat-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  font-family: inherit;
+}
+
+.new-chat-btn:hover {
+  background: var(--surface-2);
+  color: var(--fg);
+}
+
+/* ── Chat Messages ── */
+.chat-messages {
   flex: 1;
   overflow-y: auto;
   padding: 24px 32px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  position: relative;
-  z-index: 1;
+  gap: 20px;
 }
 
-.msg-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-/* Empty state */
 .empty-state {
   flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  text-align: center;
-  color: var(--text-secondary);
+  gap: 20px;
   padding: 40px;
+  color: var(--muted);
 }
 
-.empty-icon {
-  margin-bottom: 8px;
-  color: var(--text-muted);
+.empty-state svg {
+  width: 72px; height: 72px;
+  opacity: 0.25;
 }
 
 .empty-state h2 {
-  color: var(--text-primary);
   font-size: 20px;
-  font-weight: 600;
+  font-weight: 500;
+  color: var(--muted);
 }
 
-.empty-state p {
-  font-size: 14px;
-  color: var(--text-secondary);
+.suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  max-width: 460px;
 }
 
-.empty-state .hint {
-  color: var(--text-muted);
+.suggestion-chip {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 8px 16px;
   font-size: 13px;
-  margin-top: 4px;
-  font-style: italic;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
 }
 
-/* ── Messages ── */
+.suggestion-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-subtle);
+}
+
+/* ── Message bubbles ── */
 .message {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  max-width: 720px;
-  animation: msgIn 0.2s ease-out;
-}
-
-@keyframes msgIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  max-width: 75%;
 }
 
 .message.user {
   align-self: flex-end;
+  align-items: flex-end;
 }
 
-.message.user .bubble {
-  background: var(--gradient);
-  border-radius: 14px 14px 4px 14px;
+.message.ai {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+
+.message-bubble {
+  background: var(--surface-2);
   padding: 12px 16px;
-  font-size: 14px;
-  align-self: flex-end;
-  line-height: 1.5;
-  box-shadow: 0 4px 16px var(--accent-glow);
-}
-
-.message.assistant .bubble {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 14px 14px 14px 4px;
-  padding: 12px 16px;
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-.message.assistant .bubble p {
-  white-space: pre-wrap;
+  border-radius: 16px;
+  max-width: 100%;
   word-break: break-word;
+}
+
+.message.user .message-bubble {
+  background: var(--accent);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.message.ai .message-bubble {
+  border-bottom-left-radius: 4px;
+}
+
+.message .text { line-height: 1.5; }
+
+.image-previews {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.image-previews img {
+  width: 80px; height: 80px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.image-previews img:hover {
+  transform: scale(1.05);
+}
+
+.message-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.cache-badge {
+  background: var(--success-bg);
+  color: var(--success);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
 }
 
 .generating {
   display: flex;
   align-items: center;
-  gap: 10px;
-  color: var(--text-secondary);
-}
-
-/* Image thumbs */
-.image-row {
-  display: flex;
-  flex-wrap: wrap;
   gap: 8px;
+  color: var(--muted);
+  font-size: 14px;
 }
 
-.thumb {
-  max-width: 260px;
-  max-height: 260px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.thumb:hover {
-  transform: scale(1.02);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-}
-
-/* Message meta */
-.msg-info {
-  font-size: 11px;
-  color: var(--text-muted);
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  padding: 0 4px;
-}
-
-.model-tag {
-  background: var(--bg-tertiary);
-  padding: 1px 8px;
-  border-radius: 4px;
-  font-weight: 500;
-  font-size: 10px;
-  color: var(--text-secondary);
-}
-
-.cost-tag {
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-}
-
-.cost-tag.free {
-  color: var(--green);
-}
-
-.sep {
-  color: var(--border-light);
-}
-
-.tokens {
-  color: var(--text-muted);
-}
-
-/* ── Model context bar ── */
-.model-context {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 32px;
-  border-top: 1px solid var(--border);
-  background: var(--bg-secondary);
-  position: relative;
-  z-index: 1;
-}
-
-.ctx-badge {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--accent);
-  background: var(--accent-bg);
-  padding: 2px 10px;
-  border-radius: 5px;
-}
-
-.ctx-cost {
-  font-size: 11px;
-  color: var(--green);
-  font-weight: 500;
-}
-
-/* ── Transition group ── */
-.msg-enter-active {
-  transition: all 0.25s ease-out;
-}
-
-.msg-enter-from {
-  opacity: 0;
-  transform: translateY(12px);
-}
-
-.msg-move {
-  transition: transform 0.25s ease;
-}
-
-/* ── Spinner ── */
 .spinner {
-  display: inline-block;
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--accent);
-  border-top-color: transparent;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* ── Scrollbar ── */
-.chat::-webkit-scrollbar {
+.sidebar::-webkit-scrollbar,
+.chat-messages::-webkit-scrollbar {
   width: 6px;
 }
 
-.chat::-webkit-scrollbar-track {
+.sidebar::-webkit-scrollbar-track,
+.chat-messages::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.chat::-webkit-scrollbar-thumb {
-  background: var(--bg-elevated);
+.sidebar::-webkit-scrollbar-thumb,
+.chat-messages::-webkit-scrollbar-thumb {
+  background: var(--border);
   border-radius: 3px;
 }
 
-.chat::-webkit-scrollbar-thumb:hover {
-  background: var(--border-light);
-}
-
-.sidebar-inner::-webkit-scrollbar {
-  width: 4px;
-}
-
-.sidebar-inner::-webkit-scrollbar-thumb {
-  background: var(--bg-elevated);
-  border-radius: 2px;
+/* ── Responsive ── */
+@media (max-width: 900px) {
+  .sidebar {
+    width: 72px;
+    min-width: 72px;
+    padding: 16px 8px;
+  }
+  .sidebar-logo h1,
+  .nav-tab span,
+  .model-selector,
+  .cost-dashboard,
+  .sidebar-footer {
+    display: none;
+  }
+  .nav-tab {
+    justify-content: center;
+    padding: 10px;
+  }
+  .chat-messages,
+  .chat-header,
+  .chat-input-area {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
 }
 </style>

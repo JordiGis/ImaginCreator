@@ -1,18 +1,11 @@
 <template>
   <div class="model-selector">
-    <label class="section-label">Modelo</label>
-    <div class="model-options">
-      <button
-        v-for="m in MODELS"
-        :key="m.key"
-        :class="['model-btn', { active: modelValue === m.key }]"
-        @click="$emit('update:modelValue', m.key)"
-      >
-        <span class="model-name">{{ m.label }}</span>
-        <span class="model-cost">${{ m.cost.toFixed(3) }}/img</span>
-        <span class="model-desc">{{ m.desc }}</span>
-      </button>
-    </div>
+    <label>Modelo activo</label>
+    <select :value="modelValue" @change="$emit('update:modelValue', $event.target.value)">
+      <option v-for="m in MODELS" :key="m.key" :value="m.key">
+        {{ m.label }} – ${{ m.cost.toFixed(3) }}/img
+      </option>
+    </select>
   </div>
 </template>
 
@@ -27,64 +20,36 @@ defineEmits(['update:modelValue'])
 </script>
 
 <style scoped>
-.model-selector {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
+.model-selector { margin-bottom: 24px; }
 
-.section-label {
+.model-selector label {
+  display: block;
   font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-secondary);
-  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 6px;
+  padding-left: 4px;
 }
 
-.model-options {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.model-btn {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  background: var(--bg-primary);
+.model-selector select {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 12px;
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.15s;
-  color: var(--text-primary);
-  font-family: inherit;
-}
-
-.model-btn:hover {
-  border-color: var(--accent);
-  background: #1e1e30;
-}
-
-.model-btn.active {
-  border-color: var(--accent);
-  background: var(--accent-dim);
-}
-
-.model-name {
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  font: inherit;
   font-size: 13px;
-  font-weight: 600;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238a8a96' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
 }
 
-.model-cost {
-  font-size: 11px;
-  color: var(--green);
-  font-weight: 500;
-}
-
-.model-desc {
-  font-size: 11px;
-  color: var(--text-muted);
+.model-selector select:focus {
+  outline: none;
+  border-color: var(--accent);
 }
 </style>

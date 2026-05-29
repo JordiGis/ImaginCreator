@@ -1,157 +1,85 @@
 <template>
-  <div class="creator-layout">
+  <div class="char-layout">
     <!-- ── Config Panel ── -->
-    <div class="creator-config">
-      <div class="cc-header">
-        <h2>Creador de Personajes</h2>
-        <p class="cc-subtitle">Configura la apariencia y genera un retrato con IA</p>
-      </div>
+    <div class="char-config">
+      <h2>Configurador de personaje</h2>
 
-      <div class="cc-sections">
-        <div
-          v-for="cat in categories"
-          :key="cat.key"
-          :class="['trait-category', { 'multi-cat': cat.multi }]"
-        >
-          <div class="cat-header" @click="toggleCollapse(cat.key)">
-            <span class="cat-icon">{{ cat.icon }}</span>
-            <span class="cat-label">{{ cat.label }}</span>
-            <span v-if="cat.multi" class="cat-count">{{ selections[cat.key].length }}</span>
-            <svg
-              :class="['chevron', { open: !collapsed[cat.key] }]"
-              width="14" height="14" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2" stroke-linecap="round"
-            ><polyline points="6 9 12 15 18 9"/></svg>
-          </div>
-
-          <Transition name="collapse">
-            <div v-if="!collapsed[cat.key]" class="cat-options">
-              <button
-                v-for="opt in cat.options"
-                :key="opt.id"
-                :class="['trait-btn', {
-                  active: isSelected(cat, opt),
-                  multi: cat.multi,
-                }]"
-                @click="toggleTrait(cat, opt)"
-                :title="opt.label"
-              >
-                <span v-if="cat.multi && isSelected(cat, opt)" class="check">✓</span>
-                {{ opt.label }}
-              </button>
-            </div>
-          </Transition>
+      <div
+        v-for="cat in categories"
+        :key="cat.key"
+        :class="['category', { open: !collapsed[cat.key], multi: cat.multi }]"
+      >
+        <div class="category-header" @click="toggleCollapse(cat.key)">
+          <span>{{ cat.label }}</span>
+          <span v-if="cat.multi && getCount(cat) > 0" class="count">✓ {{ getCount(cat) }}</span>
+        </div>
+        <div class="category-body">
+          <button
+            v-for="opt in cat.options"
+            :key="opt.id"
+            :class="['tag-btn', { selected: isSelected(cat, opt) }]"
+            @click="toggleTrait(cat, opt)"
+          >
+            {{ opt.label }}
+          </button>
         </div>
       </div>
     </div>
 
     <!-- ── Preview / Result Panel ── -->
-    <div class="creator-preview">
-      <!-- Prompt -->
-      <div class="prompt-box">
-        <div class="pb-header">
-          <span class="pb-label">Prompt generado</span>
-          <button class="pb-copy" @click="copyPrompt" :title="copied ? '✓ Copiado' : 'Copiar'">
-            <svg v-if="!copied" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            <span v-else class="copied-text">✓</span>
-          </button>
-        </div>
-        <p class="pb-text">{{ composedPrompt }}</p>
+    <div class="char-preview">
+      <!-- Prompt box -->
+      <div class="char-prompt-box">
+        <button class="copy-btn" @click="copyPrompt">
+          {{ copied ? '✓' : '📋 Copiar' }}
+        </button>
+        <span>{{ composedPrompt || 'Selecciona rasgos para generar el prompt…' }}</span>
       </div>
 
-      <!-- Model info -->
-      <div class="model-bar">
-        <span class="mb-model">🎯 recraft/recraft-v4.1-utility</span>
-        <span class="mb-cost">~$0.040/img</span>
-      </div>
+      <!-- Model bar -->
+      <div class="model-bar">recraft/recraft-v4.1-utility / $0.040/img</div>
 
-      <!-- Custom prompt text -->
-      <div class="custom-text-box">
-        <label class="ct-label">Texto adicional para el prompt</label>
-        <textarea
-          v-model="customText"
-          class="ct-input"
-          placeholder="Ej: con una espada de fuego, fondo de castillo, estilo anime..."
-          rows="2"
-          :disabled="generating"
-          @input="autoResizeTextarea"
-        ></textarea>
-      </div>
+      <!-- Custom text -->
+      <textarea
+        v-model="customText"
+        class="char-free-input"
+        placeholder="Ej: con una espada de fuego y cicatrices en el rostro…"
+        rows="2"
+        :disabled="generating"
+      ></textarea>
 
       <!-- Actions -->
-      <div class="action-row">
-        <button class="btn btn-secondary" @click="randomize" :disabled="generating">
-          🎲 Aleatorio
-        </button>
-        <button class="btn btn-primary" @click="generate" :disabled="generating || !composedPrompt.trim()">
+      <div class="char-actions">
+        <button class="btn-secondary" @click="randomize" :disabled="generating">🎲 Aleatorio</button>
+        <button class="btn-primary" @click="generate" :disabled="generating || !composedPrompt.trim()">
           <span v-if="generating" class="spinner"></span>
-          <span v-else>🎨 Generar Personaje</span>
+          <span v-else>Generar Personaje</span>
         </button>
       </div>
 
-      <!-- Buttons to insert into chat or view gallery -->
-      <div v-if="result" class="result-actions">
-        <button class="btn btn-ghost" @click="sendToChat">
-          💬 Enviar al chat
-        </button>
-        <button class="btn btn-ghost" @click="openInGallery">
-          🖼️ Abrir en galería
-        </button>
-      </div>
-
-      <!-- Result image -->
-      <div v-if="result" class="result-area">
-        <!-- Error state -->
+      <!-- Result -->
+      <div v-if="result" :class="['char-result', { visible: true }]">
         <div v-if="result.error" class="error-box">
-          <span class="error-icon">⚠️</span>
-          <span>{{ result.error }}</span>
+          <span>⚠️ {{ result.error }}</span>
         </div>
         <template v-else>
-          <div class="result-img-wrap" @click="previewResult">
-            <img :src="result.imageUrl" alt="Generated character" class="result-img" />
-            <div class="result-overlay">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-            </div>
-          </div>
-          <div class="result-meta">
-            <span class="rm-model">{{ result.model }}</span>
-            <span class="rm-sep">·</span>
-            <span :class="['rm-cost', { free: result.cached }]">
-              {{ result.cached ? 'Caché' : `$${result.cost}` }}
-            </span>
-            <span class="rm-sep">·</span>
-            <span class="rm-tokens">{{ result.tokens }} tokens</span>
+          <img
+            :src="result.imageUrl"
+            alt="Personaje generado"
+            @click="previewResult"
+          />
+          <div class="char-result-actions">
+            <button class="btn-secondary" @click="sendToChat">💬 Enviar al chat</button>
+            <button class="btn-secondary" @click="openInGallery">🖼️ Abrir en galería</button>
           </div>
         </template>
       </div>
-
-      <!-- Empty state -->
-      <div v-else class="empty-preview">
-        <div class="ep-icon">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3">
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-            <circle cx="12" cy="7" r="4"/>
-          </svg>
-        </div>
-        <p class="ep-text">Selecciona rasgos y genera tu personaje</p>
-        <p class="ep-hint">o haz click en <strong>Aleatorio</strong> para una combinación al azar</p>
-      </div>
     </div>
-
-    <!-- Full-size image modal -->
-    <Teleport to="body">
-      <Transition name="fade">
-        <div v-if="modalSrc" class="image-modal" @click.self="modalSrc = ''">
-          <button class="modal-close" @click="modalSrc = ''">✕</button>
-          <img :src="modalSrc" alt="Full character" class="modal-img" />
-        </div>
-      </Transition>
-    </Teleport>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { TRAIT_CATEGORIES, getDefaultSelections, composePrompt } from '../config/characterTraits.js'
 import { useApi } from '../composables/useApi.js'
 import { useCreditTracker } from '../composables/useCreditTracker.js'
@@ -161,22 +89,23 @@ const CHAR_MODEL_KEY = 'recraft-v41'
 const api = useApi()
 const credit = useCreditTracker()
 
-// ── State ──
-
 const selections = reactive(getDefaultSelections())
 const generating = ref(false)
 const result = ref(null)
-const modalSrc = ref('')
 const copied = ref(false)
 const customText = ref('')
 
-// Collapse state per category
 const collapsed = reactive(
-  Object.fromEntries(TRAIT_CATEGORIES.map(c => [c.key, false]))
+  Object.fromEntries(TRAIT_CATEGORIES.map(c => [c.key, true]))
 )
 
 function toggleCollapse(key) {
   collapsed[key] = !collapsed[key]
+}
+
+function getCount(cat) {
+  if (!cat.multi) return 0
+  return selections[cat.key].length
 }
 
 function isSelected(cat, opt) {
@@ -200,15 +129,12 @@ function toggleTrait(cat, opt) {
   }
 }
 
-// ── Computed ──
-
 const categories = TRAIT_CATEGORIES
 
 const composedPrompt = computed(() => {
   const base = composePrompt(selections)
   const extra = customText.value.trim()
   if (!extra) return base
-  // Insert custom text before the style suffix (last line)
   const suffix = ', fantasy character concept art'
   const idx = base.indexOf(suffix)
   if (idx !== -1) {
@@ -217,18 +143,9 @@ const composedPrompt = computed(() => {
   return `${base}, ${extra}`
 })
 
-function autoResizeTextarea(e) {
-  const el = e.target
-  el.style.height = 'auto'
-  el.style.height = Math.min(el.scrollHeight, 120) + 'px'
-}
-
-// ── Randomize ──
-
 function randomize() {
   for (const cat of TRAIT_CATEGORIES) {
     if (cat.multi) {
-      // Pick 0-3 random special traits
       const shuffled = [...cat.options].sort(() => Math.random() - 0.5)
       const count = Math.floor(Math.random() * Math.min(4, cat.options.length + 1))
       selections[cat.key].splice(0, selections[cat.key].length, ...shuffled.slice(0, count))
@@ -239,8 +156,6 @@ function randomize() {
   }
 }
 
-// ── Generate ──
-
 async function generate() {
   if (generating.value) return
   generating.value = true
@@ -248,7 +163,6 @@ async function generate() {
 
   try {
     const prompt = composedPrompt.value
-    // Force model to recraft-v4.1-utility
     const res = await api.generateImage(prompt, CHAR_MODEL_KEY)
     result.value = {
       imageUrl: res.images?.[0]?.dataUrl || `/img/${res.images?.[0]?.file}`,
@@ -275,23 +189,18 @@ async function generate() {
   }
 }
 
-// ── Copy prompt ──
-
 function copyPrompt() {
   navigator.clipboard.writeText(composedPrompt.value)
   copied.value = true
   setTimeout(() => (copied.value = false), 2000)
 }
 
-// ── Preview ──
-
 function previewResult() {
+  // Use a simple modal approach
   if (result.value?.imageUrl) {
-    modalSrc.value = result.value.imageUrl
+    window.openLightbox?.(result.value.imageUrl)
   }
 }
-
-// ── Emits ──
 
 const emit = defineEmits(['send-to-chat', 'open-gallery'])
 
@@ -307,377 +216,241 @@ function openInGallery() {
 </script>
 
 <style scoped>
-.creator-layout {
+.char-layout {
   flex: 1;
   display: flex;
+  flex-wrap: wrap;
   min-height: 0;
-  background: var(--bg-primary);
-  position: relative;
-}
-
-/* Grid background */
-.creator-layout::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: radial-gradient(circle at 1px 1px, var(--border) 1px, transparent 0);
-  background-size: 32px 32px;
-  opacity: 0.2;
-  pointer-events: none;
+  background: var(--bg-deep);
 }
 
 /* ── Config Panel ── */
 
-.creator-config {
-  width: 420px;
-  min-width: 380px;
+.char-config {
+  flex: 0 0 420px;
+  min-width: 0;
+  max-width: 100%;
+  background: var(--surface);
   border-right: 1px solid var(--border);
-  overflow-y: auto;
   padding: 24px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  position: relative;
-  z-index: 1;
+  overflow-y: auto;
+  height: 100%;
+  min-height: 0;
 }
 
-.cc-header {
-  margin-bottom: 4px;
+.char-config h2 {
+  margin-bottom: 16px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--fg);
 }
 
-.cc-header h2 {
-  font-size: 18px;
-  font-weight: 800;
-  letter-spacing: -0.3px;
-  background: var(--gradient);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+.char-config .category + .category {
+  margin-top: 6px;
 }
 
-.cc-subtitle {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: 2px;
-}
+/* ── Categories ── */
 
-/* ── Trait Categories ── */
-
-.cc-sections {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.trait-category {
-  background: var(--bg-secondary);
+.category {
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius);
   overflow: hidden;
 }
 
-.cat-header {
+.category-header {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 8px;
   padding: 10px 14px;
+  background: var(--surface-2);
   cursor: pointer;
-  user-select: none;
-  transition: background 0.15s;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
+  transition: background 0.1s;
 }
 
-.cat-header:hover {
-  background: var(--bg-tertiary);
+.category-header:hover {
+  background: var(--border);
 }
 
-.cat-icon {
-  font-size: 14px;
-  line-height: 1;
-}
-
-.cat-label {
-  flex: 1;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-}
-
-.cat-count {
-  font-size: 11px;
-  font-weight: 600;
+.category-header .count {
   color: var(--accent);
-  background: var(--accent-bg);
-  padding: 0 7px;
-  border-radius: 6px;
-  line-height: 18px;
-  min-width: 20px;
-  text-align: center;
+  font-size: 12px;
 }
 
-.chevron {
-  color: var(--text-muted);
-  transition: transform 0.2s;
-}
-
-.chevron.open {
-  transform: rotate(180deg);
-}
-
-.cat-options {
-  padding: 4px 12px 12px;
-  display: flex;
+.category-body {
+  overflow: hidden;
+  max-height: 0;
+  padding: 0 14px;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 6px;
+  border-top: 1px solid var(--border);
+  transition: max-height 0.25s ease, padding 0.25s ease;
+  visibility: hidden;
 }
 
-/* ── Trait Buttons ── */
+.category.open .category-body {
+  max-height: 600px;
+  padding: 10px 14px;
+  visibility: visible;
+}
 
-.trait-btn {
-  font-family: inherit;
-  font-size: 12px;
-  padding: 5px 12px;
-  border-radius: 6px;
+/* ── Tag Buttons ── */
+
+.tag-btn {
+  background: var(--surface-2);
   border: 1px solid var(--border);
-  background: var(--bg-primary);
-  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--muted);
   cursor: pointer;
-  transition: all 0.12s;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+  transition: all 0.15s;
+  font-family: inherit;
 }
 
-.trait-btn:hover {
+.tag-btn:hover {
   border-color: var(--accent);
-  color: var(--text-primary);
-  background: var(--accent-bg);
-}
-
-.trait-btn.active {
-  border-color: var(--accent);
-  background: var(--accent-bg);
   color: var(--accent);
-  font-weight: 600;
-  box-shadow: 0 0 12px var(--accent-glow);
 }
 
-.trait-btn.multi.active {
-  border-color: var(--green);
-  background: var(--green-bg);
-  color: var(--green);
-  box-shadow: 0 0 12px var(--green-glow);
+.tag-btn.selected {
+  background: var(--accent-subtle);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
-.check {
-  font-size: 11px;
-  font-weight: 700;
-}
+/* ── Preview Panel ── */
 
-/* ── Preview / Result Panel ── */
-
-.creator-preview {
+.char-preview {
   flex: 1;
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  padding: 24px 28px;
-  gap: 14px;
+  gap: 20px;
+  overflow-y: auto;
+}
+
+.char-prompt-box {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+  max-height: 120px;
   overflow-y: auto;
   position: relative;
-  z-index: 1;
-  min-width: 0;
 }
 
-/* ── Prompt Box ── */
-
-.prompt-box {
-  background: var(--bg-secondary);
+.char-prompt-box .copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 14px 16px;
-}
-
-.pb-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.pb-label {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--text-muted);
-  font-weight: 600;
-}
-
-.pb-copy {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 2px;
   border-radius: 4px;
-  transition: all 0.15s;
-}
-
-.pb-copy:hover {
-  color: var(--accent);
-  background: var(--accent-bg);
-}
-
-.copied-text {
-  color: var(--green);
-  font-weight: 700;
-}
-
-.pb-text {
+  padding: 4px 8px;
+  color: var(--muted);
+  cursor: pointer;
   font-size: 12px;
-  line-height: 1.6;
-  color: var(--text-secondary);
-  word-break: break-word;
-  white-space: pre-wrap;
+  transition: background 0.1s;
+  font-family: inherit;
 }
 
-/* ── Model Bar ── */
+.char-prompt-box .copy-btn:hover {
+  background: var(--border);
+  color: var(--fg);
+}
 
 .model-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
   font-size: 12px;
-}
-
-.mb-model {
-  color: var(--accent);
-  font-weight: 600;
-  background: var(--accent-bg);
-  padding: 2px 10px;
-  border-radius: 5px;
-}
-
-.mb-cost {
-  color: var(--green);
+  color: var(--success);
   font-weight: 500;
 }
 
-/* ── Custom Text ── */
-
-.custom-text-box {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.ct-label {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--text-muted);
-  font-weight: 600;
-}
-
-.ct-input {
-  background: var(--bg-secondary);
+.char-free-input {
+  width: 100%;
+  background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text-primary);
-  font-family: inherit;
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  color: var(--fg);
+  font: inherit;
   font-size: 13px;
-  padding: 10px 12px;
-  resize: none;
-  min-height: 48px;
-  max-height: 120px;
-  transition: border-color 0.15s;
+  min-height: 70px;
+  resize: vertical;
+  outline: none;
   line-height: 1.5;
 }
 
-.ct-input:focus {
-  outline: none;
+.char-free-input:focus {
   border-color: var(--accent);
 }
 
-.ct-input:disabled {
-  opacity: 0.6;
+.char-free-input::placeholder {
+  color: var(--muted);
 }
 
-.ct-input::placeholder {
-  color: var(--text-muted);
-  font-size: 12px;
+.char-free-input:disabled {
+  opacity: 0.5;
 }
 
 /* ── Actions ── */
 
-.action-row {
+.char-actions {
   display: flex;
-  gap: 8px;
-}
-
-.btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 11px 20px;
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s;
-  font-family: inherit;
-  border: none;
-  white-space: nowrap;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .btn-primary {
-  flex: 1;
-  background: var(--gradient);
+  background: var(--accent);
   color: #fff;
-  box-shadow: 0 4px 20px var(--accent-glow);
+  border: none;
+  padding: 10px 24px;
+  border-radius: var(--radius);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 14px;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .btn-primary:hover:not(:disabled) {
-  filter: brightness(1.1);
-  box-shadow: 0 6px 28px var(--accent-glow);
+  background: var(--accent-hover);
 }
 
 .btn-primary:disabled {
-  opacity: 0.4;
+  opacity: 0.5;
   cursor: default;
 }
 
 .btn-secondary {
-  background: var(--bg-tertiary);
+  background: var(--surface-2);
+  color: var(--fg);
   border: 1px solid var(--border);
-  color: var(--text-primary);
-}
-
-.btn-secondary:hover {
-  border-color: var(--accent);
-  background: var(--accent-bg);
-  box-shadow: 0 0 16px var(--accent-glow);
-}
-
-.result-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.btn-ghost {
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--text-secondary);
-  font-size: 12px;
-  padding: 7px 14px;
+  padding: 10px 20px;
+  border-radius: var(--radius);
   font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 14px;
+  font-family: inherit;
 }
 
-.btn-ghost:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--accent-bg);
+.btn-secondary:hover:not(:disabled) {
+  background: var(--border);
+}
+
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .spinner {
@@ -690,35 +463,19 @@ function openInGallery() {
   animation: spin 0.7s linear infinite;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* ── Result ── */
 
-.result-area {
+.char-result {
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  padding: 20px;
+  text-align: center;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   animation: fadeIn 0.3s ease-out;
-}
-
-.error-box {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: #ff6b6b;
-  font-size: 13px;
-  line-height: 1.5;
-  background: #2a1010;
-  border: 1px solid #4a2020;
-  border-radius: 10px;
-  padding: 14px 18px;
-}
-
-.error-icon {
-  font-size: 18px;
-  flex-shrink: 0;
 }
 
 @keyframes fadeIn {
@@ -726,223 +483,68 @@ function openInGallery() {
   to { opacity: 1; transform: translateY(0); }
 }
 
-.result-img-wrap {
-  position: relative;
-  max-width: 480px;
+.char-result.visible { display: flex; }
+
+.char-result img {
+  max-width: 300px;
   width: 100%;
-  border-radius: 12px;
-  overflow: hidden;
+  border-radius: var(--radius);
   border: 1px solid var(--border);
+  margin: 0 auto;
   cursor: pointer;
   transition: border-color 0.2s;
 }
 
-.result-img-wrap:hover {
+.char-result img:hover {
   border-color: var(--accent);
 }
 
-.result-img {
-  width: 100%;
-  height: auto;
-  display: block;
-}
-
-.result-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(0,0,0,0);
+.char-result-actions {
   display: flex;
-  align-items: center;
+  gap: 10px;
   justify-content: center;
-  transition: background 0.2s;
 }
 
-.result-overlay svg {
-  color: #fff;
-  opacity: 0;
-  transform: scale(0.8);
-  transition: all 0.2s;
-}
-
-.result-img-wrap:hover .result-overlay {
-  background: rgba(0,0,0,0.35);
-}
-
-.result-img-wrap:hover .result-overlay svg {
-  opacity: 1;
-  transform: scale(1);
-}
-
-.result-meta {
-  font-size: 11px;
-  color: var(--text-muted);
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-
-.rm-model {
-  background: var(--bg-tertiary);
-  padding: 1px 8px;
-  border-radius: 4px;
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-
-.rm-sep {
-  color: var(--border-light);
-}
-
-.rm-cost {
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-}
-
-.rm-cost.free {
-  color: var(--green);
-}
-
-.rm-tokens {
-  color: var(--text-muted);
-}
-
-/* ── Error state ── */
-
-.result-area .error-text {
-  color: #ff6b6b;
+.error-box {
+  color: #ff5252;
   font-size: 13px;
   background: #2a1010;
   border: 1px solid #4a2020;
-  border-radius: 8px;
-  padding: 12px 16px;
-}
-
-/* ── Empty state ── */
-
-.empty-preview {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  color: var(--text-muted);
-  text-align: center;
-  padding: 40px;
-}
-
-.ep-icon {
-  margin-bottom: 6px;
-}
-
-.ep-text {
-  font-size: 15px;
-  color: var(--text-secondary);
-}
-
-.ep-hint {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.ep-hint strong {
-  color: var(--accent);
-}
-
-/* ── Full image modal ── */
-
-.image-modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.85);
-  z-index: 9999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 40px;
-}
-
-.modal-close {
-  position: absolute;
-  top: 20px;
-  right: 24px;
-  background: rgba(0,0,0,0.5);
-  border: 1px solid var(--border-light);
-  color: #fff;
-  font-size: 20px;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s;
-  font-family: inherit;
-}
-
-.modal-close:hover {
-  background: rgba(255,50,50,0.3);
-  border-color: #ff4444;
-}
-
-.modal-img {
-  max-width: 90%;
-  max-height: 90%;
-  border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-}
-
-/* ── Collapse transition ── */
-
-.collapse-enter-active {
-  transition: all 0.15s ease-out;
-}
-
-.collapse-leave-active {
-  transition: all 0.1s ease-in;
-}
-
-.collapse-enter-from,
-.collapse-leave-to {
-  opacity: 0;
-  max-height: 0;
-  padding-top: 0;
-  padding-bottom: 0;
-}
-
-/* ── Fade transition (modal) ── */
-
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.2s;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  text-align: left;
 }
 
 /* ── Scrollbar ── */
 
-.creator-config::-webkit-scrollbar,
-.creator-preview::-webkit-scrollbar {
+.char-config::-webkit-scrollbar,
+.char-preview::-webkit-scrollbar {
   width: 6px;
 }
 
-.creator-config::-webkit-scrollbar-track,
-.creator-preview::-webkit-scrollbar-track {
+.char-config::-webkit-scrollbar-track,
+.char-preview::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.creator-config::-webkit-scrollbar-thumb,
-.creator-preview::-webkit-scrollbar-thumb {
-  background: var(--bg-elevated);
+.char-config::-webkit-scrollbar-thumb,
+.char-preview::-webkit-scrollbar-thumb {
+  background: var(--border);
   border-radius: 3px;
 }
 
-.creator-config::-webkit-scrollbar-thumb:hover,
-.creator-preview::-webkit-scrollbar-thumb:hover {
-  background: var(--border-light);
+/* ── Responsive ── */
+@media (max-width: 900px) {
+  .char-config {
+    flex: 1 1 100%;
+    max-width: 100%;
+    min-width: 0;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    max-height: 50vh;
+  }
+  .char-preview {
+    padding: 16px;
+  }
 }
 </style>

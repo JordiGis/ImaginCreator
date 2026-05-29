@@ -1,39 +1,26 @@
 <template>
   <div class="cost-dashboard">
-    <label class="section-label">Estadísticas</label>
-
-    <div class="stat-row">
-      <span class="stat-icon">🖼️</span>
-      <div class="stat-info">
-        <span class="stat-value">{{ totalImages }}</span>
-        <span class="stat-label">Imágenes</span>
-      </div>
+    <h3>Costes</h3>
+    <div class="cost-item">
+      <span class="label">Gasto total</span>
+      <span class="value">${{ totalCost.toFixed(2) }}</span>
     </div>
-
-    <div class="stat-row">
-      <span class="stat-icon">💰</span>
-      <div class="stat-info">
-        <span class="stat-value cost">${{ totalCost.toFixed(4) }}</span>
-        <span class="stat-label">Gastado</span>
-      </div>
+    <div class="cost-item">
+      <span class="label">Tokens</span>
+      <span class="value">{{ formatTokens(totalTokens) }}</span>
     </div>
-
-    <div class="stat-row">
-      <span class="stat-icon">📊</span>
-      <div class="stat-info">
-        <span class="stat-value">{{ formatTokens(totalTokens) }}</span>
-        <span class="stat-label">Tokens</span>
-      </div>
+    <div class="cost-item">
+      <span class="label">Imágenes</span>
+      <span class="value">{{ totalImages }}</span>
     </div>
-
-    <div v-if="hasLimits" class="limits-info">
-      <div v-if="dailyRemaining !== Infinity" class="limit-row">
-        <span>Límite diario</span>
-        <span :class="limitClass(dailyRemaining)">${{ dailyRemaining.toFixed(4) }} restantes</span>
+    <div v-if="hasLimits" class="cost-limits">
+      <div class="limit-row">
+        <span class="label">Diario restante</span>
+        <span class="remaining">${{ dailyRemaining.toFixed(2) }} / ${{ dailyLimit.toFixed(2) }}</span>
       </div>
-      <div v-if="weeklyRemaining !== Infinity" class="limit-row">
-        <span>Límite semanal</span>
-        <span :class="limitClass(weeklyRemaining)">${{ weeklyRemaining.toFixed(4) }} restantes</span>
+      <div class="limit-row">
+        <span class="label">Semanal restante</span>
+        <span class="remaining">${{ weeklyRemaining.toFixed(2) }} / ${{ weeklyLimit.toFixed(2) }}</span>
       </div>
     </div>
   </div>
@@ -47,7 +34,9 @@ const props = defineProps({
   totalTokens: { type: Number, default: 0 },
   totalImages: { type: Number, default: 0 },
   dailyRemaining: { type: Number, default: Infinity },
-  weeklyRemaining: { type: Number, default: Infinity }
+  weeklyRemaining: { type: Number, default: Infinity },
+  dailyLimit: { type: Number, default: 0 },
+  weeklyLimit: { type: Number, default: 0 },
 })
 
 const hasLimits = computed(() =>
@@ -55,85 +44,52 @@ const hasLimits = computed(() =>
 )
 
 function formatTokens(n) {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`
   return String(n)
-}
-
-function limitClass(remaining) {
-  if (remaining <= 0) return 'limit-exceeded'
-  if (remaining < 0.02) return 'limit-low'
-  return 'limit-ok'
 }
 </script>
 
 <style scoped>
 .cost-dashboard {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 24px;
 }
 
-.section-label {
+.cost-dashboard h3 {
   font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-secondary);
-  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 10px;
 }
 
-.stat-row {
+.cost-item {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  background: var(--bg-primary);
-  border-radius: 6px;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 13px;
 }
 
-.stat-icon {
-  font-size: 16px;
-  width: 24px;
-  text-align: center;
-}
+.cost-item .label { color: var(--muted); }
+.cost-item .value { font-weight: 500; color: var(--fg); }
 
-.stat-info {
+.cost-limits {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-}
-
-.stat-value {
-  font-size: 14px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.3;
-}
-
-.stat-value.cost { color: var(--green); }
-
-.stat-label {
-  font-size: 10px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-}
-
-.limits-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 8px 10px;
-  background: var(--bg-primary);
-  border-radius: 6px;
-  font-size: 11px;
+  gap: 6px;
 }
 
 .limit-row {
   display: flex;
   justify-content: space-between;
-  color: var(--text-secondary);
+  font-size: 12px;
 }
 
-.limit-ok { color: var(--green); }
-.limit-low { color: #ff9800; }
-.limit-exceeded { color: #f44336; }
+.limit-row .label { color: var(--muted); }
+.limit-row .remaining { color: var(--success); font-weight: 500; }
 </style>
