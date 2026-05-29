@@ -65,6 +65,19 @@
         <span class="mb-cost">~$0.040/img</span>
       </div>
 
+      <!-- Custom prompt text -->
+      <div class="custom-text-box">
+        <label class="ct-label">Texto adicional para el prompt</label>
+        <textarea
+          v-model="customText"
+          class="ct-input"
+          placeholder="Ej: con una espada de fuego, fondo de castillo, estilo anime..."
+          rows="2"
+          :disabled="generating"
+          @input="autoResizeTextarea"
+        ></textarea>
+      </div>
+
       <!-- Actions -->
       <div class="action-row">
         <button class="btn btn-secondary" @click="randomize" :disabled="generating">
@@ -155,6 +168,7 @@ const generating = ref(false)
 const result = ref(null)
 const modalSrc = ref('')
 const copied = ref(false)
+const customText = ref('')
 
 // Collapse state per category
 const collapsed = reactive(
@@ -190,7 +204,24 @@ function toggleTrait(cat, opt) {
 
 const categories = TRAIT_CATEGORIES
 
-const composedPrompt = computed(() => composePrompt(selections))
+const composedPrompt = computed(() => {
+  const base = composePrompt(selections)
+  const extra = customText.value.trim()
+  if (!extra) return base
+  // Insert custom text before the style suffix (last line)
+  const suffix = ', fantasy character concept art'
+  const idx = base.indexOf(suffix)
+  if (idx !== -1) {
+    return base.slice(0, idx) + `, ${extra}` + base.slice(idx)
+  }
+  return `${base}, ${extra}`
+})
+
+function autoResizeTextarea(e) {
+  const el = e.target
+  el.style.height = 'auto'
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px'
+}
 
 // ── Randomize ──
 
@@ -530,6 +561,51 @@ function openInGallery() {
 .mb-cost {
   color: var(--green);
   font-weight: 500;
+}
+
+/* ── Custom Text ── */
+
+.custom-text-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ct-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.ct-input {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+  padding: 10px 12px;
+  resize: none;
+  min-height: 48px;
+  max-height: 120px;
+  transition: border-color 0.15s;
+  line-height: 1.5;
+}
+
+.ct-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.ct-input:disabled {
+  opacity: 0.6;
+}
+
+.ct-input::placeholder {
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 /* ── Actions ── */
