@@ -386,165 +386,97 @@ export function composeTags(selections) {
   return parts.join(', ')
 }
 
+// ── Tag matching (used by chat → configurator auto-apply) ──
+
+// Build reverse map: normalized tag → { categoryKey, option }
+let _reverseTagMap = null
+function getReverseTagMap() {
+  if (_reverseTagMap) return _reverseTagMap
+  const map = new Map()
+  for (const cat of PONY_CATEGORIES) {
+    for (const opt of cat.options) {
+      if (!opt.tag) continue
+      // Split compound tags (e.g. "score_9, score_8_up, score_7_up")
+      const tags = opt.tag.split(',').map(t => t.trim().toLowerCase()).filter(Boolean)
+      for (const t of tags) {
+        // Store both raw and stripped (weight-free) keys for matching
+        const raw = t
+        const stripped = raw.replace(/^\(|\)$/g, '').replace(/:\d+(\.\d+)?$/, '').trim()
+        const keys = raw === stripped ? [raw] : [raw, stripped]
+        for (const key of keys) {
+          if (!map.has(key)) map.set(key, [])
+          map.get(key).push({ categoryKey: cat.key, option: opt, category: cat })
+        }
+      }
+    }
+  }
+  _reverseTagMap = map
+  return map
+}
+
 /**
- * Recommend Draw Things parameter ranges based on tag selections.
- * Returns array of parameter cards with label, range, recommended value, and rationale.
+ * Parse a raw Danbooru tag string (from AI output) and return config actions.
+ * Strips weight syntax, matches against PONY_CATEGORIES options.
+ *
+ * Returns: { selections: { [categoryKey]: option }, extraTags: string[] }
+ * - selections: single-select categories get their new option (chat overrides config)
+ * - extraTags: tags that don't match any config option
  */
-export function getDrawThingsSettings(selections) {
-  const ctx = {
-    hasAction: selections.action?.id !== 'none',
-    style: selections.emphasis?.id || 'masterpiece',
-    isGroup: selections.subject?.id === 'group',
-    isCouple: selections.subject?.id?.includes('1girl_1boy') || selections.subject?.id?.includes('2girls') || selections.subject?.id?.includes('2boys'),
-    hasBodyFocus: selections.bodyFocus?.id !== 'full' && selections.bodyFocus?.id !== 'none',
-    expression: selections.expression?.id,
+export function parseTagStringToActions(tagString, currentSelections) {
+  const map = getReverseTagMap()
+  const resultSelections = {}
+  const usedTags = new Set() // track which reverse-map tags were used
+  const extraTags = []
+  const matchedOptions = new Set() // track option objects already selected
+
+  // Split and clean tags
+  const rawTags = tagString.split(',').map(t => t.trim()).filter(Boolean)
+
+  for (const raw of rawTags) {
+    // Strip weight syntax: (tag:1.2) → tag
+    let tag = raw.replace(/^\(|\)$/g, '').replace(/:\d+(\.\d+)?$/, '').trim().toLowerCase()
+    if (!tag) continue
+
+    // Check if this tag exists in our reverse map
+    const matches = map.get(tag)
+    if (matches) {
+      for (const m of matches) {
+        const optId = m.option.id
+        const optKey = `${m.categoryKey}::${optId}`
+
+        // Don't process the same option twice
+        if (matchedOptions.has(optKey)) continue
+
+        if (m.category.multi) {
+          // Multi-select: add as potential selection
+          if (!resultSelections[m.categoryKey]) resultSelections[m.categoryKey] = []
+          if (!resultSelections[m.categoryKey].some(s => s.id === m.option.id)) {
+            resultSelections[m.categoryKey].push(m.option)
+          }
+        } else {
+          // Single-select: first match wins (most specific tag comes first)
+          if (!resultSelections[m.categoryKey]) {
+            resultSelections[m.categoryKey] = m.option
+          }
+        }
+
+        matchedOptions.add(optKey)
+        usedTags.add(tag)
+
+        // For compound tags like "score_9, score_8_up, score_7_up",
+        // mark all component tags as used
+        if (m.option.tag) {
+          const compoundTags = m.option.tag.split(',').map(t => t.trim().toLowerCase())
+          for (const ct of compoundTags) {
+            usedTags.add(ct)
+          }
+        }
+      }
+    } else {
+      // Not in any option — add to extra tags
+      extraTags.push(raw)
+    }
   }
 
-  // ── CFG Scale ──
-  let cfgMin = 6, cfgMax = 9, cfgRec = 7, cfgNote = 'Estándar Pony Diffusion'
-  if (ctx.style === 'photorealistic') {
-    cfgMin = 4; cfgMax = 7; cfgRec = 5.5; cfgNote = 'Fotorrealismo necesita CFG bajo para evitar saturación'
-  } else if (ctx.style === 'anime') {
-    cfgMin = 8; cfgMax = 11; cfgRec = 9; cfgNote = 'Estilo anime se beneficia de CFG alto para contornos marcados'
-  } else if (ctx.style === 'cinematic') {
-    cfgMin = 6; cfgMax = 9; cfgRec = 7.5; cfgNote = 'Cinematográfico: equilibrar detalle con naturalidad'
-  }
-  if (ctx.hasAction) {
-    cfgRec = Math.min(cfgRec + 0.5, 12); cfgNote += ' — acción requiere +0.5 CFG'
-  }
-  if (ctx.isGroup) {
-    cfgMax = Math.min(cfgMax + 1, 13); cfgRec = Math.min(cfgRec + 1, 12); cfgNote += ' — grupo necesita +1 CFG'
-  }
-
-  // ── Steps ──
-  let stepsMin = 28, stepsMax = 40, stepsRec = 32, stepsNote = 'Estándar Pony'
-  if (ctx.style === 'photorealistic') {
-    stepsMin = 20; stepsMax = 30; stepsRec = 25; stepsNote = 'Fotorrealismo: menos steps preserva naturalidad'
-  } else if (ctx.style === 'anime') {
-    stepsMin = 30; stepsMax = 50; stepsRec = 38; stepsNote = 'Anime: más steps para refinamiento'
-  } else if (ctx.style === 'cinematic') {
-    stepsMin = 30; stepsMax = 45; stepsRec = 36; stepsNote = 'Cinematográfico: balance detalle-velocidad'
-  }
-  if (ctx.hasAction) {
-    stepsRec = Math.min(stepsRec + 4, 55); stepsNote += ' — acción compleja, +4 steps'
-  }
-
-  // ── Sampler ──
-  let sampler = 'DPM++ 2M Karras', samplerNote = 'Mejor balance calidad/velocidad para Pony'
-  if (ctx.style === 'photorealistic') {
-    sampler = 'Euler a'; samplerNote = 'Euler a da texturas más naturales para realismo'
-  } else if (ctx.style === 'anime') {
-    sampler = 'DPM++ 2M SDE Karras'; samplerNote = 'SDE Karras refina bordes para estilo anime'
-  } else if (ctx.style === 'cinematic') {
-    sampler = 'DPM++ 3M SDE'; samplerNote = '3M SDE para gradientes suaves cinematográficos'
-  }
-
-  // ── Clip Skip ──
-  let clipSkip = 2, clipSkipNote = 'Pony V6 recomienda Clip Skip 2 por defecto'
-  if (ctx.style === 'photorealistic') {
-    clipSkip = 1; clipSkipNote = 'Clip Skip 1 para preservar fidelidad realista'
-  }
-
-  // ── Resolution ──
-  const resolutions = [
-    { w: 1024, h: 1024, label: '1:1 (1024²)', note: 'SDXL nativa — recomendada' },
-    { w: 1152, h: 896, label: '4:3 horizontal (1152×896)', note: 'Bueno para cuerpos enteros' },
-    { w: 896, h: 1152, label: '3:4 vertical (896×1152)', note: 'Bueno para retratos' },
-    { w: 1216, h: 832, label: '3:2 horizontal (1216×832)', note: 'Paisajes / escenas amplias' },
-    { w: 832, h: 1216, label: '2:3 vertical (832×1216)', note: 'Cuerpo entero vertical' },
-  ]
-  let resRec = 0, resNote = 'Usar resolución nativa SDXL (múltiplos de 64)'
-  if (ctx.style === 'photorealistic') {
-    resRec = 1; resNote = '4:3 ligeramente mejor para fotorrealismo'
-  } else if (ctx.style === 'cinematic') {
-    resRec = 3; resNote = '3:2 es relación cinematográfica clásica'
-  }
-  if (ctx.hasBodyFocus) {
-    resRec = 0; resNote = '1:1 o vertical para planos detalle'
-  }
-
-  // ── Fuerza (Denoising Strength) ──
-  // Draw Things: solo afecta si importas imagen de referencia (img2img).
-  // 100% = imagen fuente ignorada = modo texto a imagen.
-  let fuerzaRec = 0.4, fuerzaMin = 0.3, fuerzaMax = 0.55, fuerzaNote = 'Solo en img2img. Bajo = respeta original, alto = libertad artística. 100% = texto a imagen.'
-  if (ctx.style === 'anime') {
-    fuerzaRec = 0.5; fuerzaMin = 0.4; fuerzaMax = 0.6; fuerzaNote = 'Anime tolera más fuerza.'
-  }
-  if (ctx.style === 'photorealistic') {
-    fuerzaRec = 0.35; fuerzaMin = 0.25; fuerzaMax = 0.5; fuerzaNote = 'Fuerza baja preserva estructura de imagen original.'
-  }
-
-  // ── Semilla (Seed) ──
-  let seedNote = '-1 = aleatoria. Usa un número fijo para reproducir el mismo resultado.'
-  if (ctx.hasAction) {
-    seedNote += ' Escenas de acción: prueba seeds distintas si ves artefactos.'
-  }
-
-  // ── Prompt negativo ──
-  let negBase = 'bad anatomy, ugly, distorted, low quality, worst quality'
-  let negExtra = ''
-  if (ctx.style === 'photorealistic') {
-    negExtra = ', illustration, cartoon, 3d render, painting'
-  } else if (ctx.style === 'anime') {
-    negExtra = ', realistic, photograph, 3d render, photorealistic'
-  }
-  let negNote = 'Copia esto en el campo "Prompt negativo" de Draw Things.'
-
-  return [
-    {
-      param: 'Escala CFG',
-      icon: '🎛️',
-      min: cfgMin,
-      max: cfgMax,
-      recommended: cfgRec,
-      note: cfgNote,
-    },
-    {
-      param: 'Pasos',
-      icon: '👣',
-      min: stepsMin,
-      max: stepsMax,
-      recommended: stepsRec,
-      note: stepsNote,
-    },
-    {
-      param: 'Muestreador',
-      icon: '🧪',
-      value: sampler,
-      note: samplerNote,
-    },
-    {
-      param: 'Clip Skip',
-      icon: '✂️',
-      value: clipSkip,
-      note: clipSkipNote,
-    },
-    {
-      param: 'Semilla',
-      icon: '🎲',
-      value: 'Aleatoria (-1)',
-      note: seedNote,
-    },
-    {
-      param: 'Tamaño',
-      icon: '📐',
-      options: resolutions,
-      recommendedIdx: resRec,
-      note: resNote,
-    },
-    {
-      param: 'Prompt negativo',
-      icon: '🚫',
-      value: `${negBase}${negExtra}`,
-      note: negNote,
-    },
-    {
-      param: 'Fuerza',
-      icon: '🌊',
-      min: fuerzaMin,
-      max: fuerzaMax,
-      recommended: fuerzaRec,
-      note: fuerzaNote,
-    },
-  ]
+  return { selections: resultSelections, extraTags }
 }

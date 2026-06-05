@@ -71,11 +71,15 @@ export function useApi() {
     return data
   }
 
-  async function ponyChat(messages) {
+  async function ponyChat(messages, options = {}) {
     const res = await fetch('/api/pony/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages })
+      body: JSON.stringify({
+        messages,
+        configContext: options.configContext || '',
+        currentTags: options.currentTags || ''
+      })
     })
     const text = await res.text()
     let data

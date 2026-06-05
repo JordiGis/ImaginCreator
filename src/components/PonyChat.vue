@@ -67,15 +67,15 @@
 <script setup>
 import { ref, nextTick } from 'vue'
 import { useApi } from '../composables/useApi.js'
+import { usePonyStore } from '../composables/usePonyStore.js'
 
 const api = useApi()
-const emit = defineEmits(['apply-tags'])
+const { ponyState, getConfigContext, getCurrentTagString, applyAiResponse } = usePonyStore()
 
 const inputText = ref('')
 const messages = ref([])
 const loading = ref(false)
 const chatRef = ref(null)
-const copiedIdx = ref(-1)
 
 const suggestions = [
   'chica sumisa atada a una cama, vendada, con expresión de miedo y excitación',
@@ -100,8 +100,34 @@ async function sendMessage(text) {
   scrollBottom()
 
   try {
-    const res = await api.ponyChat(messages.value.map(m => ({ role: m.role, content: m.content })))
-    messages.value.push({ role: 'assistant', content: res.text })
+    // Send current config context + current tag string so DeepSeek knows what's configured
+    const configContext = getConfigContext()
+    const currentTags = getCurrentTagString()
+    const res = await api.ponyChat(
+      messages.value.map(m => ({ role: m.role, content: m.content })),
+      { configContext, currentTags }
+    )
+
+    // Apply AI response to configurator (auto-selects tags, updates negative prompt, raw tags)
+    const summary = applyAiResponse(res.text)
+
+    // Build display text — append auto-apply summary if anything changed
+    let displayText = res.text
+    const changes = []
+    if (summary.changed.length) {
+      changes.push(`${summary.changed.length} categoría(s) actualizada(s)`)
+    }
+    if (summary.rawTagsAdded.length) {
+      changes.push(`${summary.rawTagsAdded.length} raw tag(s) añadida(s)`)
+    }
+    if (summary.negativePromptChanged) {
+      changes.push('negative prompt actualizado')
+    }
+    if (changes.length) {
+      displayText += `\n\n✅ Tags aplicadas al configurador: ${changes.join(', ')}.`
+    }
+
+    messages.value.push({ role: 'assistant', content: displayText })
   } catch (e) {
     messages.value.push({ role: 'assistant', content: `Error: ${e.message}` })
   } finally {
@@ -120,7 +146,13 @@ function copyMsg(text) {
 }
 
 function applyTags(text) {
-  emit('apply-tags', text)
+  const summary = applyAiResponse(text)
+  const changes = []
+  if (summary.changed.length) changes.push(`${summary.changed.length} categoría(s)`)
+  if (summary.rawTagsAdded.length) changes.push(`${summary.rawTagsAdded.length} raw tag(s)`)
+  if (summary.negativePromptChanged) changes.push('negative prompt')
+  // We could show a toast here, but for now just log
+  console.log('✅ Tags re-aplicadas:', changes.join(', ') || 'sin cambios')
 }
 </script>
 

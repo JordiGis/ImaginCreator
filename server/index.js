@@ -304,23 +304,17 @@ async function handleRequest(req, res) {
   // POST /api/pony/chat — chat with DeepSeek Flash for Pony tag assistance
   if (method === 'POST' && url.pathname === '/api/pony/chat') {
     try {
-      const { messages } = await parseBody(req)
+      const { messages, configContext, currentTags } = await parseBody(req)
       if (!messages?.length) return json(res, 400, { error: 'Messages required' })
 
-      const result = await callApi({
-        model: 'deepseek/deepseek-chat',
-        messages: [
-          {
-            role: 'system',
-            content: `Eres un experto en Pony Diffusion V6 XL, un modelo de generación de imágenes que usa tags Danbooru.
+      // Build system prompt — base rules + config context + current tags
+      let systemContent = `Eres un experto en Pony Diffusion V6 XL, un modelo de generación de imágenes que usa tags Danbooru.
 
 REGLAS:
 - Solo respondes con tags Danbooru separados por comas.
 - Sin narrativa, sin explicaciones, sin markdown.
 - Usa formato: rating:explicit, 1girl, tag1, tag2, (tag:1.2)
 - Tags en inglés SIEMPRE (Danbooru style).
-- Incrusta el contexto del usuario en tags, no lo expliques.
-- Si el usuario pide "amplía", añade tags relevantes adicionales.
 - Usa score_9, score_8_up, score_7_up al inicio para calidad.
 - Añade (masterpiece:1.2) al final.
 - Si es NSFW, usa rating:explicit.
@@ -328,7 +322,44 @@ REGLAS:
 Ejemplo:
 Usuario: "chica rubia en la playa, desnuda, masturbándose"
 Respuesta: rating:explicit, score_9, score_8_up, score_7_up, solo, 1girl, nude, blonde_hair, long_hair, blue_eyes, large_breasts, spread_legs, masturbation, beach, outdoors, sunshine, (masterpiece:1.2), (best_quality:1.2)`
-          },
+
+      // Add config context if available
+      if (configContext) {
+        systemContent += `\n\n═══ CONFIGURACIÓN ACTUAL (categorías del configurador) ═══\n${configContext}`
+      }
+
+      // Add current tag string if available
+      if (currentTags) {
+        systemContent += `\n═══ TAGS ACTUALES (string que se enviaría al modelo) ═══\n${currentTags}`
+      }
+
+      // Add critical instruction — user prompt overrides everything
+      systemContent += `\n\n═══ INSTRUCCIÓN CRÍTICA ═══
+El usuario va a escribir lo que QUIERE generar. Su petición tiene PRIORIDAD TOTAL sobre la configuración actual.
+
+TU TRABAJO ES:
+1. Lee lo que pide el usuario.
+2. Compara con la configuración actual (si se te ha dado).
+3. Si la configuración actual NO coincide con lo que pide el usuario, CÁMBIALA — no la mantengas.
+4. Si la configuración actual es compatible, mantenla pero ajústala.
+5. Si hacen falta tags adicionales que no están en las categorías del configurador, AÑÁDELOS como tags extra.
+6. NO tengas miedo de cambiar categorías enteras. Lo que importa es lo que el usuario quiere.
+
+Ejemplo:
+- Config actual: rating:explicit, score_9, blonde_hair, blue_eyes, bed
+- Usuario dice: "pelirroja con coletas en la ducha"
+- Tu respuesta DEBE incluir: red_hair, twin_tails, shower (y quitar blonde_hair, blue_eyes, bed)
+- Tags que no cambian (rating, quality, emphasis): se mantienen
+
+REGLAS ADICIONALES:
+- Si es relevante, puedes sugerir un negative prompt con una línea que empiece por "NEG:" (sin comillas). Ejemplo: NEG: bad hands, extra fingers
+- Los tags que no estén en las categorías del configurador se añadirán automáticamente como raw tags.
+- Si el usuario pide "amplía" o "más tags", añade todos los tags Danbooru relevantes que se te ocurran.`
+
+      const result = await callApi({
+        model: 'deepseek/deepseek-chat',
+        messages: [
+          { role: 'system', content: systemContent },
           ...messages
         ],
         apiKey: KEY

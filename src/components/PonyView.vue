@@ -23,10 +23,7 @@
     </div>
     <div class="pony-content" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
       <PonyConfigurator v-show="ponySubView === 'config'" />
-      <PonyChat
-        v-show="ponySubView === 'chat'"
-        @apply-tags="handlePonyApplyTags"
-      />
+      <PonyChat v-show="ponySubView === 'chat'" />
     </div>
   </div>
 </template>
@@ -37,8 +34,4 @@ import PonyConfigurator from './PonyConfigurator.vue'
 import PonyChat from './PonyChat.vue'
 
 const ponySubView = ref('config')
-
-function handlePonyApplyTags(tags) {
-  ponySubView.value = 'config'
-}
 </script>
