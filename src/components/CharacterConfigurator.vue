@@ -5,13 +5,20 @@
       <div class="view-header-actions">
         <!-- Presets -->
         <div class="char-presets">
-          <button class="btn-small" @click="savePreset">💾 Guardar</button>
+          <button class="btn-small" @click="savePreset">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+            Guardar
+          </button>
           <select v-model="selectedPreset" class="preset-select">
             <option value="">— Cargar preset —</option>
             <option v-for="name in presetNames" :key="name" :value="name">{{ name }}</option>
           </select>
-          <button class="btn-small" @click="loadPreset" :disabled="!selectedPreset" title="Cargar">📂</button>
-          <button class="btn-small" @click="deletePreset" :disabled="!selectedPreset" title="Eliminar">🗑️</button>
+          <button class="btn-small" @click="loadPreset" :disabled="!selectedPreset" title="Cargar">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+          </button>
+          <button class="btn-small" @click="deletePreset" :disabled="!selectedPreset" title="Eliminar">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+          </button>
         </div>
       </div>
     </div>
@@ -28,6 +35,7 @@
         <div class="category-header" @click="toggleCollapse(cat.key)">
           <span>{{ cat.label }}</span>
           <span v-if="cat.multi && getCount(cat) > 0" class="count">✓ {{ getCount(cat) }}</span>
+          <span v-else-if="!cat.multi && getSingleSelectionLabel(cat)" class="count">✓ {{ getSingleSelectionLabel(cat) }}</span>
         </div>
         <div class="category-body">
           <button
@@ -47,7 +55,9 @@
       <!-- Prompt box -->
       <div class="char-prompt-box">
         <button class="copy-btn" @click="copyPrompt">
-          {{ copied ? '✓' : '📋 Copiar' }}
+          <svg v-if="copied" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          {{ copied ? 'Copiado' : 'Copiar' }}
         </button>
         <span>{{ composedPrompt || 'Selecciona rasgos para generar el prompt…' }}</span>
       </div>
@@ -66,7 +76,10 @@
 
       <!-- Actions -->
       <div class="char-actions">
-        <button class="btn-secondary" @click="randomize" :disabled="generating">🎲 Aleatorio</button>
+        <button class="btn-secondary" @click="randomize" :disabled="generating">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><circle cx="15.5" cy="15.5" r="1.5"></circle><circle cx="15.5" cy="8.5" r="1.5"></circle><circle cx="8.5" cy="15.5" r="1.5"></circle><circle cx="12" cy="12" r="1.5"></circle></svg>
+          Aleatorio
+        </button>
         <button class="btn-primary" @click="generate" :disabled="generating || !composedPrompt.trim()">
           <span v-if="generating" class="spinner"></span>
           <span v-else>Generar Personaje</span>
@@ -77,7 +90,10 @@
       <!-- Result -->
       <div v-if="result" :class="['char-result', { visible: true }]">
         <div v-if="result.error" class="error-box">
-          <span>⚠️ {{ result.error }}</span>
+          <span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffcc00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; margin-bottom: -2px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            {{ result.error }}
+          </span>
         </div>
         <template v-else>
           <img
@@ -86,12 +102,53 @@
             @click="previewResult"
           />
           <div class="char-result-actions">
-            <button class="btn-secondary" @click="sendToChat">💬 Enviar al chat</button>
-            <button class="btn-secondary" @click="openInGallery">🖼️ Abrir en galería</button>
+            <button class="btn-secondary" @click="sendToChat">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+              Enviar al chat
+            </button>
+            <button class="btn-secondary" @click="openInGallery">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+              Abrir en galería
+            </button>
           </div>
         </template>
       </div>
     </div>
+    </div>
+
+    <!-- ===== Save Preset Modal ===== -->
+    <div v-if="saveModalOpen" class="modal-overlay" @click="saveModalOpen = false">
+      <div class="modal" @click.stop>
+        <div class="modal-header">
+          <h3>Guardar Preset</h3>
+          <button @click="saveModalOpen = false" class="close-btn">×</button>
+        </div>
+        <div class="modal-body">
+          <p>Introduce un nombre para el nuevo preset:</p>
+          <input type="text" v-model="presetNameInput" placeholder="Nombre del preset" class="preset-input" @keyup.enter="confirmSavePreset" autofocus />
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" @click="saveModalOpen = false">Cancelar</button>
+          <button class="btn-primary" @click="confirmSavePreset" :disabled="!presetNameInput.trim()">Guardar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Confirm Delete Modal ===== -->
+    <div v-if="confirmModalOpen" class="modal-overlay" @click="confirmModalOpen = false">
+      <div class="modal" @click.stop>
+        <div class="modal-header">
+          <h3>Eliminar Preset</h3>
+          <button @click="confirmModalOpen = false" class="close-btn">×</button>
+        </div>
+        <div class="modal-body">
+          <p>¿Estás seguro de que quieres eliminar el preset "<strong>{{ selectedPreset }}</strong>"?</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" @click="confirmModalOpen = false">Cancelar</button>
+          <button class="btn-danger" @click="confirmDeletePreset">Eliminar</button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -129,12 +186,29 @@ const CHAR_PRESETS_KEY = 'imagin-creator-char-presets'
 
 const selectedPreset = ref('')
 
-const presetNames = computed(() => {
-  try { return Object.keys(JSON.parse(localStorage.getItem(CHAR_PRESETS_KEY) || '{}')).sort() } catch { return [] }
-})
+const saveModalOpen = ref(false)
+const confirmModalOpen = ref(false)
+const presetNameInput = ref('')
+
+const presetNames = ref([])
+
+function updatePresetNames() {
+  try {
+    presetNames.value = Object.keys(JSON.parse(localStorage.getItem(CHAR_PRESETS_KEY) || '{}')).sort()
+  } catch {
+    presetNames.value = []
+  }
+}
+
+updatePresetNames()
 
 function savePreset() {
-  const name = prompt('Nombre del preset:')
+  presetNameInput.value = ''
+  saveModalOpen.value = true
+}
+
+function confirmSavePreset() {
+  const name = presetNameInput.value
   if (!name || !name.trim()) return
   const s = {}
   for (const cat of TRAIT_CATEGORIES) {
@@ -151,7 +225,9 @@ function savePreset() {
     collapsed: { ...collapsed },
   }
   localStorage.setItem(CHAR_PRESETS_KEY, JSON.stringify(presets))
+  updatePresetNames()
   selectedPreset.value = name.trim()
+  saveModalOpen.value = false
 }
 
 function loadPreset() {
@@ -161,19 +237,26 @@ function loadPreset() {
   if (!preset) return
   // Apply selections
   if (preset.selections) {
+    const defaults = getDefaultSelections()
     for (const cat of TRAIT_CATEGORIES) {
       const val = preset.selections[cat.key]
-      if (val == null) continue
-      if (cat.multi && Array.isArray(val)) {
-        const valid = val.map(id => cat.options.find(o => o.id === id)).filter(Boolean)
-        selections[cat.key].splice(0, selections[cat.key].length, ...valid)
+      if (cat.multi) {
+        selections[cat.key].splice(0, selections[cat.key].length) // clear existing
+        if (Array.isArray(val)) {
+          const valid = val.map(id => cat.options.find(o => o.id === id)).filter(Boolean)
+          selections[cat.key].push(...valid)
+        }
       } else {
-        const opt = cat.options.find(o => o.id === val)
-        if (opt) selections[cat.key] = opt
+        if (val) {
+          const opt = cat.options.find(o => o.id === val)
+          selections[cat.key] = opt || defaults[cat.key]
+        } else {
+          selections[cat.key] = defaults[cat.key]
+        }
       }
     }
   }
-  if (preset.customText != null) customText.value = preset.customText
+  customText.value = preset.customText || ''
   if (preset.collapsed) {
     for (const key of Object.keys(collapsed)) {
       collapsed[key] = preset.collapsed[key] !== false
@@ -183,11 +266,17 @@ function loadPreset() {
 
 function deletePreset() {
   if (!selectedPreset.value) return
-  if (!confirm(`¿Eliminar preset "${selectedPreset.value}"?`)) return
+  confirmModalOpen.value = true
+}
+
+function confirmDeletePreset() {
+  if (!selectedPreset.value) return
   const presets = JSON.parse(localStorage.getItem(CHAR_PRESETS_KEY) || '{}')
   delete presets[selectedPreset.value]
   localStorage.setItem(CHAR_PRESETS_KEY, JSON.stringify(presets))
+  updatePresetNames()
   selectedPreset.value = ''
+  confirmModalOpen.value = false
 }
 
 function loadSavedConfig() {
@@ -256,6 +345,11 @@ function toggleCollapse(key) {
 function getCount(cat) {
   if (!cat.multi) return 0
   return selections[cat.key].length
+}
+
+function getSingleSelectionLabel(cat) {
+  if (cat.multi) return ''
+  return selections[cat.key]?.label || ''
 }
 
 function isSelected(cat, opt) {
@@ -766,5 +860,108 @@ function openInGallery() {
 .preset-select option {
   background: var(--surface);
   color: var(--fg);
+}
+
+/* Modals */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: 90%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--fg);
+  margin: 0;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.close-btn:hover {
+  color: var(--fg);
+}
+
+.modal-body {
+  padding: 24px;
+  color: var(--fg);
+  font-size: 14px;
+}
+
+.modal-body p {
+  margin: 0 0 16px 0;
+}
+
+.preset-input {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.preset-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+}
+
+.btn-danger {
+  background: #ff5252;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.btn-danger:hover {
+  opacity: 0.9;
 }
 </style>

@@ -3,9 +3,8 @@
     <!-- ===== Sidebar ===== -->
     <aside class="sidebar">
       <div class="sidebar-logo">
-        <svg viewBox="0 0 32 32" fill="none">
-          <rect width="32" height="32" rx="8" fill="var(--accent)" opacity="0.2"/>
-          <path d="M10 20L16 10l6 10H10z" fill="var(--accent)"/>
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 28px; height: 28px; margin-right: 4px;">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
         </svg>
         <h1>ImaginCreator</h1>
       </div>

@@ -21,12 +21,18 @@
 
     <!-- Translated text preview -->
     <div v-if="translatedPreview" class="translated-preview">
-      <span class="tp-label">🌐 Traducido:</span>
+      <span class="tp-label">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; margin-bottom: -2px;"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+        Traducido:
+      </span>
       <span class="tp-text">{{ translatedPreview }}</span>
       <button class="tp-dismiss" @click="translatedPreview = ''">✕</button>
     </div>
     <div v-else-if="translateError" class="translated-preview error">
-      <span class="tp-label">⚠️ Error traducción:</span>
+      <span class="tp-label">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffcc00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; margin-bottom: -2px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+        Error traducción:
+      </span>
       <span class="tp-text">{{ translateError }}</span>
       <button class="tp-dismiss" @click="translateError = ''">✕</button>
     </div>
@@ -49,7 +55,7 @@
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
             </button>
             <button class="attach-btn" :class="{ active: translateEnabled }" @click="translateEnabled = !translateEnabled" :disabled="disabled" title="Traducir a inglés antes de generar">
-              🌐
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
             </button>
             <input
               ref="fileInputRef"
@@ -59,7 +65,10 @@
               hidden
               @change="handleFiles"
             />
-            <span :class="['cache-indicator', { visible: hasCache }]">🆓 En caché</span>
+            <span :class="['cache-indicator', { visible: hasCache }]">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        En caché
+      </span>
           </div>
           <button class="send-btn" :disabled="disabled || (!text.trim() && !images.length)" @click="send">
             <span v-if="disabled && translating" class="spinner"></span>

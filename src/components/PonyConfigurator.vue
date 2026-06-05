@@ -61,7 +61,8 @@
         <pre class="tag-output final-tag">{{ finalTagString || '—' }}</pre>
         <div class="tag-actions">
           <button class="btn-primary" @click="copyTags" :disabled="!finalTagString.trim()">
-            {{ copied ? '✓ Copiado' : '📋 Copiar tags' }}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            {{ copied ? 'Copiado' : 'Copiar tags' }}
           </button>
           <button
             class="btn-generate"
@@ -69,10 +70,14 @@
             :disabled="generating || !finalTagString.trim()"
           >
             <span v-if="generating" class="spinner"></span>
-            <span v-else>🚀 Generar con Pony</span>
+            <span v-else>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+              Generar con Pony
+            </span>
           </button>
           <button class="btn-secondary" @click="clearAll">
-            🗑️ Limpiar
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            Limpiar
           </button>
         </div>
       </div>
@@ -80,7 +85,10 @@
       <!-- Result -->
       <div v-if="result" :class="['char-result', { visible: true }]">
         <div v-if="result.error" class="error-box">
-          <span>⚠️ {{ result.error }}</span>
+          <span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffcc00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; margin-bottom: -2px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            {{ result.error }}
+          </span>
         </div>
         <template v-else>
           <img
@@ -90,7 +98,10 @@
           />
           <div class="char-result-actions">
             <span class="result-meta">{{ result.model }} · {{ result.params.steps }} steps · CFG {{ result.params.cfg }}</span>
-            <button class="btn-secondary" @click="downloadResult">💾 Descargar</button>
+            <button class="btn-secondary" @click="downloadResult">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+              Descargar
+            </button>
           </div>
         </template>
       </div>
@@ -98,7 +109,10 @@
       <!-- Settings recommendations -->
       <div class="settings-panel">
         <div class="settings-header">
-          <span>🎛️ Ajustes para Draw Things</span>
+          <span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+            Ajustes para Draw Things
+          </span>
           <span class="settings-hint">Adaptados a tu selección</span>
         </div>
         <div class="settings-grid">

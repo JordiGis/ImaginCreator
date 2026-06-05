@@ -3,7 +3,9 @@
     <!-- ── Chat Messages ── -->
     <div class="pony-chat-messages" ref="chatRef">
       <div v-if="!messages.length" class="pony-chat-empty">
-        <span class="empty-icon">🤖</span>
+        <span class="empty-icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"></path><path d="M9 21h6"></path><path d="M12 19v2"></path></svg>
+        </span>
         <h3>Asistente de tags Pony</h3>
         <p>Pregúntame qué tags usar para tu escena NSFW.<br>Ej: <em>"chica pelirroja sumisa, atada, en un sótano"</em></p>
         <div class="suggested-prompts">
@@ -22,10 +24,12 @@
           <div class="pony-msg-text">{{ msg.content }}</div>
           <div v-if="msg.role === 'assistant'" class="pony-msg-actions">
             <button class="pony-msg-btn" @click="copyMsg(msg.content)" title="Copiar tags">
-              📋 Copiar
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              Copiar
             </button>
             <button class="pony-msg-btn" @click="applyTags(msg.content)" title="Enviar al configurador">
-              ⚡ Aplicar al config
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+              Aplicar al config
             </button>
           </div>
         </div>

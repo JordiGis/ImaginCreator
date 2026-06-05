@@ -45,14 +45,19 @@
                 :alt="`Image ${j + 1}`"
                 @click="openModal(img.dataUrl || `/img/${img.file}`)"
               />
-              <button class="ref-btn" title="Usar como referencia" @click.stop="useAsRef(img.dataUrl || `/img/${img.file}`)">↩</button>
+              <button class="ref-btn" title="Usar como referencia" @click.stop="useAsRef(img.dataUrl || `/img/${img.file}`)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 10 4 15 9 20"></polyline><path d="M20 4v7a4 4 0 0 1-4 4H4"></path></svg>
+              </button>
             </div>
           </div>
         </div>
         <div v-if="msg.role === 'assistant'" class="message-meta">
           <span v-if="msg.info">{{ msg.info.model }}</span>
           <span v-if="msg.info">·</span>
-          <span v-if="msg.info && msg.info.cached" class="cache-badge">🆓 Caché</span>
+          <span v-if="msg.info && msg.info.cached" class="cache-badge">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 2px;"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            Caché
+          </span>
           <span v-if="msg.info && !msg.info.cached">${{ msg.info.cost }}</span>
           <span v-if="msg.info">· {{ msg.info.tokens }} tokens</span>
         </div>
@@ -101,7 +106,9 @@
               <h4>{{ s.title }}</h4>
               <span class="history-date">{{ new Date(s.updatedAt).toLocaleString() }}</span>
             </div>
-            <button class="delete-btn" @click.stop="deleteSession(s.id)" title="Eliminar">🗑️</button>
+            <button class="delete-btn" @click.stop="deleteSession(s.id)" title="Eliminar">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            </button>
           </div>
         </div>
       </div>
