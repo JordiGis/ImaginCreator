@@ -2,6 +2,7 @@
 // ImaginCreator — backend API server
 // Usage: OPENROUTER_API_KEY=sk-or-v1-... node server/index.js
 import http from 'node:http'
+import https from 'node:https'
 import path from 'node:path'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -97,14 +98,18 @@ async function handleRequest(req, res) {
   // POST /api/generate — generate image
   if (method === 'POST' && url.pathname === '/api/generate') {
     try {
-      const { prompt, modelKey, images } = await parseBody(req)
+      const { prompt, modelKey, images, systemPrompt } = await parseBody(req)
       const hasImages = Array.isArray(images) && images.length
+      if (hasImages) {
+        console.log(`📎 ${images.length} image(s) attached, total ~${(JSON.stringify(images).length / 1024).toFixed(0)}KB`)
+      }
       if ((!prompt || !prompt.trim()) && !hasImages) return json(res, 400, { error: 'Prompt or image required' })
 
       const model = getModel(modelKey)
 
-      // Check cache first (credit optimization!) — skip if images attached
-      if (!hasImages) {
+      // Check cache first (credit optimization!) — skip if images attached or systemPrompt varies
+      const hasSystemPrompt = systemPrompt && systemPrompt.trim()
+      if (!hasImages && !hasSystemPrompt) {
         const cached = checkPromptCache(prompt, modelKey)
         if (cached.hit) {
           // Return cached result — no API call
@@ -138,12 +143,18 @@ async function handleRequest(req, res) {
         }
       }
 
+      // Build messages array — prepend system prompt (user override > model default > none)
+      const effectiveSystem = (systemPrompt && systemPrompt.trim()) || model.defaultSystemPrompt || ''
+      const messages = []
+      if (effectiveSystem) {
+        messages.push({ role: 'system', content: effectiveSystem })
+      }
+      messages.push({ role: 'user', content: userContent })
+
       // Call OpenRouter — newer models need modalities: ["image"]
       const result = await callApi({
         model: model.id,
-        messages: [
-          { role: 'user', content: userContent }
-        ],
+        messages,
         modalities: ['image'],
         maxTokens: model.maxTokens,
         apiKey: KEY
@@ -199,6 +210,28 @@ async function handleRequest(req, res) {
     return json(res, 200, { cached: cached.hit, hash: cached.hit ? cached.hash : null })
   }
 
+  // POST /api/translate — translate text to English using DeepSeek
+  if (method === 'POST' && url.pathname === '/api/translate') {
+    try {
+      const { text } = await parseBody(req)
+      if (!text || !text.trim()) return json(res, 400, { error: 'Text required' })
+
+      const result = await callApi({
+        model: 'deepseek/deepseek-chat',
+        messages: [
+          { role: 'system', content: 'You are a translator. Translate the following text to fluent English suitable for an AI image generation prompt. Return ONLY the translation — no quotes, no explanations, no extra text, no markdown.' },
+          { role: 'user', content: text.trim() }
+        ],
+        apiKey: KEY
+      })
+
+      return json(res, 200, { translated: result.text || text.trim() })
+    } catch (e) {
+      console.error('❌ Translate error:', e)
+      return json(res, 500, { error: String(e) })
+    }
+  }
+
   // GET / — health check
   if (method === 'GET' && (url.pathname === '/' || url.pathname === '/api/health')) {
     return json(res, 200, {
@@ -207,6 +240,111 @@ async function handleRequest(req, res) {
       stats: getStats(),
       models: getAllModels().length
     })
+  }
+
+  // POST /api/pony/generate — generate image via local SD WebUI Pony model
+  if (method === 'POST' && url.pathname === '/api/pony/generate') {
+    try {
+      const { prompt, negativePrompt, params } = await parseBody(req)
+      if (!prompt || !prompt.trim()) return json(res, 400, { error: 'Prompt required' })
+
+      const body = JSON.stringify({
+        prompt: prompt.trim(),
+        negative_prompt: negativePrompt || 'bad anatomy, ugly, distorted, low quality, worst quality',
+        width: params?.width || 1024,
+        height: params?.height || 1024,
+        steps: params?.steps || 30,
+        cfg_scale: params?.cfg || 7,
+        sampler_name: params?.sampler || 'DPM++ 2M Karras',
+        seed: params?.seed || -1,
+        batch_size: 1,
+      })
+
+      const sdResult = await new Promise((resolve, reject) => {
+        const opts = {
+          hostname: '127.0.0.1',
+          port: 7860,
+          path: '/sdapi/v1/txt2img',
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(body)
+          }
+        }
+        const req = http.request(opts, (r) => {
+          let data = ''
+          r.on('data', (c) => (data += c))
+          r.on('end', () => {
+            try {
+              resolve(JSON.parse(data))
+            } catch { reject(new Error(`SD WebUI parse error: ${data.slice(0, 500)}`)) }
+          })
+        })
+        req.on('error', (e) => reject(new Error(`SD WebUI connection failed: ${e.message}`)))
+        req.write(body)
+        req.end()
+      })
+
+      if (!sdResult.images?.length) {
+        return json(res, 500, { error: 'SD WebUI returned no images' })
+      }
+
+      // Save the image
+      const dataUrl = `data:image/png;base64,${sdResult.images[0]}`
+      const saved = saveImage(dataUrl, `[Pony] ${prompt}`, 'ponydiffusionv6xl')
+
+      return json(res, 200, {
+        imageUrl: `/img/${saved.name}`,
+        dataUrl,
+        prompt,
+        model: 'Pony Diffusion V6 XL',
+        params: { steps: body.steps, cfg: body.cfg_scale, sampler: body.sampler_name, width: body.width, height: body.height },
+        file: saved.name,
+      })
+    } catch (e) {
+      console.error('❌ Pony generate error:', e)
+      return json(res, 500, { error: String(e) })
+    }
+  }
+
+  // POST /api/pony/chat — chat with DeepSeek Flash for Pony tag assistance
+  if (method === 'POST' && url.pathname === '/api/pony/chat') {
+    try {
+      const { messages } = await parseBody(req)
+      if (!messages?.length) return json(res, 400, { error: 'Messages required' })
+
+      const result = await callApi({
+        model: 'deepseek/deepseek-chat',
+        messages: [
+          {
+            role: 'system',
+            content: `Eres un experto en Pony Diffusion V6 XL, un modelo de generación de imágenes que usa tags Danbooru.
+
+REGLAS:
+- Solo respondes con tags Danbooru separados por comas.
+- Sin narrativa, sin explicaciones, sin markdown.
+- Usa formato: rating:explicit, 1girl, tag1, tag2, (tag:1.2)
+- Tags en inglés SIEMPRE (Danbooru style).
+- Incrusta el contexto del usuario en tags, no lo expliques.
+- Si el usuario pide "amplía", añade tags relevantes adicionales.
+- Usa score_9, score_8_up, score_7_up al inicio para calidad.
+- Añade (masterpiece:1.2) al final.
+- Si es NSFW, usa rating:explicit.
+
+Ejemplo:
+Usuario: "chica rubia en la playa, desnuda, masturbándose"
+Respuesta: rating:explicit, score_9, score_8_up, score_7_up, solo, 1girl, nude, blonde_hair, long_hair, blue_eyes, large_breasts, spread_legs, masturbation, beach, outdoors, sunshine, (masterpiece:1.2), (best_quality:1.2)`
+          },
+          ...messages
+        ],
+        apiKey: KEY
+      })
+
+      return json(res, 200, { text: result.text, usage: result.usage })
+    } catch (e) {
+      console.error('❌ Pony chat error:', e)
+      return json(res, 500, { error: String(e) })
+    }
   }
 
   return json(res, 404, { error: 'Not found' })

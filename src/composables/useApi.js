@@ -3,13 +3,13 @@ import { ref } from 'vue'
 const generating = ref(false)
 
 export function useApi() {
-  async function generateImage(prompt, modelKey, images = []) {
+  async function generateImage(prompt, modelKey, images = [], systemPrompt = '') {
     generating.value = true
     try {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, modelKey, images })
+        body: JSON.stringify({ prompt, modelKey, images, systemPrompt })
       })
       const text = await res.text()
       let data
@@ -43,5 +43,50 @@ export function useApi() {
     return data
   }
 
-  return { generating, generateImage, fetchImages, fetchStats, checkCache }
+  async function translatePrompt(text) {
+    const res = await fetch('/api/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Translation failed')
+    return data.translated
+  }
+
+  async function ponyGenerate(prompt, negativePrompt, params = {}) {
+    const res = await fetch('/api/pony/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, negativePrompt, params })
+    })
+    const text = await res.text()
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch {
+      throw new Error(text || `Error ${res.status}`)
+    }
+    if (!res.ok) throw new Error(data.error || `Error ${res.status}`)
+    return data
+  }
+
+  async function ponyChat(messages) {
+    const res = await fetch('/api/pony/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages })
+    })
+    const text = await res.text()
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch {
+      throw new Error(text || `Error ${res.status}`)
+    }
+    if (!res.ok) throw new Error(data.error || `Error ${res.status}`)
+    return data
+  }
+
+  return { generating, generateImage, fetchImages, fetchStats, checkCache, translatePrompt, ponyGenerate, ponyChat }
 }

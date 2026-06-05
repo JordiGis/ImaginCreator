@@ -57,6 +57,17 @@
         </button>
       </div>
 
+      <!-- Presets -->
+      <div class="char-presets">
+        <button class="btn-small" @click="savePreset">💾 Guardar</button>
+        <select v-model="selectedPreset" class="preset-select">
+          <option value="">— Cargar preset —</option>
+          <option v-for="name in presetNames" :key="name" :value="name">{{ name }}</option>
+        </select>
+        <button class="btn-small" @click="loadPreset" :disabled="!selectedPreset" title="Cargar">📂</button>
+        <button class="btn-small" @click="deletePreset" :disabled="!selectedPreset" title="Eliminar">🗑️</button>
+      </div>
+
       <!-- Result -->
       <div v-if="result" :class="['char-result', { visible: true }]">
         <div v-if="result.error" class="error-box">
@@ -79,7 +90,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 import { TRAIT_CATEGORIES, getDefaultSelections, composePrompt } from '../config/characterTraits.js'
 import { useApi } from '../composables/useApi.js'
 import { useCreditTracker } from '../composables/useCreditTracker.js'
@@ -98,6 +109,132 @@ const customText = ref('')
 const collapsed = reactive(
   Object.fromEntries(TRAIT_CATEGORIES.map(c => [c.key, true]))
 )
+
+// ── Persistence ──
+const CHAR_STORAGE_KEY = 'imagin-creator-char-config'
+const CHAR_PRESETS_KEY = 'imagin-creator-char-presets'
+
+const selectedPreset = ref('')
+
+const presetNames = computed(() => {
+  try { return Object.keys(JSON.parse(localStorage.getItem(CHAR_PRESETS_KEY) || '{}')).sort() } catch { return [] }
+})
+
+function savePreset() {
+  const name = prompt('Nombre del preset:')
+  if (!name || !name.trim()) return
+  const s = {}
+  for (const cat of TRAIT_CATEGORIES) {
+    if (cat.multi) {
+      s[cat.key] = selections[cat.key].map(o => o.id)
+    } else {
+      s[cat.key] = selections[cat.key]?.id || null
+    }
+  }
+  const presets = JSON.parse(localStorage.getItem(CHAR_PRESETS_KEY) || '{}')
+  presets[name.trim()] = {
+    selections: s,
+    customText: customText.value,
+    collapsed: { ...collapsed },
+  }
+  localStorage.setItem(CHAR_PRESETS_KEY, JSON.stringify(presets))
+  selectedPreset.value = name.trim()
+}
+
+function loadPreset() {
+  if (!selectedPreset.value) return
+  const presets = JSON.parse(localStorage.getItem(CHAR_PRESETS_KEY) || '{}')
+  const preset = presets[selectedPreset.value]
+  if (!preset) return
+  // Apply selections
+  if (preset.selections) {
+    for (const cat of TRAIT_CATEGORIES) {
+      const val = preset.selections[cat.key]
+      if (val == null) continue
+      if (cat.multi && Array.isArray(val)) {
+        const valid = val.map(id => cat.options.find(o => o.id === id)).filter(Boolean)
+        selections[cat.key].splice(0, selections[cat.key].length, ...valid)
+      } else {
+        const opt = cat.options.find(o => o.id === val)
+        if (opt) selections[cat.key] = opt
+      }
+    }
+  }
+  if (preset.customText != null) customText.value = preset.customText
+  if (preset.collapsed) {
+    for (const key of Object.keys(collapsed)) {
+      collapsed[key] = preset.collapsed[key] !== false
+    }
+  }
+}
+
+function deletePreset() {
+  if (!selectedPreset.value) return
+  if (!confirm(`¿Eliminar preset "${selectedPreset.value}"?`)) return
+  const presets = JSON.parse(localStorage.getItem(CHAR_PRESETS_KEY) || '{}')
+  delete presets[selectedPreset.value]
+  localStorage.setItem(CHAR_PRESETS_KEY, JSON.stringify(presets))
+  selectedPreset.value = ''
+}
+
+function loadSavedConfig() {
+  try {
+    const raw = localStorage.getItem(CHAR_STORAGE_KEY)
+    if (!raw) return
+    const saved = JSON.parse(raw)
+    // Restore selections
+    if (saved.selections) {
+      const defaults = getDefaultSelections()
+      for (const cat of TRAIT_CATEGORIES) {
+        const savedVal = saved.selections[cat.key]
+        if (savedVal == null) continue
+        if (cat.multi && Array.isArray(savedVal)) {
+          const validOpts = savedVal
+            .map(id => cat.options.find(o => o.id === id))
+            .filter(Boolean)
+          selections[cat.key].splice(0, selections[cat.key].length, ...validOpts)
+        } else {
+          const opt = cat.options.find(o => o.id === savedVal)
+          if (opt) selections[cat.key] = opt
+        }
+      }
+    }
+    // Restore custom text
+    if (saved.customText) customText.value = saved.customText
+    // Restore collapsed state
+    if (saved.collapsed) {
+      for (const key of Object.keys(collapsed)) {
+        if (saved.collapsed[key] === false) collapsed[key] = false
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to load character config:', e)
+  }
+}
+
+function saveConfig() {
+  try {
+    const s = {}
+    for (const cat of TRAIT_CATEGORIES) {
+      if (cat.multi) {
+        s[cat.key] = selections[cat.key].map(o => o.id)
+      } else {
+        s[cat.key] = selections[cat.key]?.id || null
+      }
+    }
+    localStorage.setItem(CHAR_STORAGE_KEY, JSON.stringify({
+      selections: s,
+      customText: customText.value,
+      collapsed: { ...collapsed },
+    }))
+  } catch {}
+}
+
+// Auto-save when selections, custom text, or collapsed state changes
+watch([() => selections, customText, () => collapsed], saveConfig, { deep: true })
+
+// Load saved config on mount
+loadSavedConfig()
 
 function toggleCollapse(key) {
   collapsed[key] = !collapsed[key]
@@ -546,5 +683,58 @@ function openInGallery() {
   .char-preview {
     padding: 16px;
   }
+}
+
+/* ── Presets ── */
+.char-presets {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.btn-small {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: inherit;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.btn-small:hover:not(:disabled) {
+  color: var(--fg);
+  border-color: var(--accent);
+}
+
+.btn-small:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.preset-select {
+  flex: 1;
+  min-width: 80px;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg);
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 6px;
+  cursor: pointer;
+}
+
+.preset-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.preset-select option {
+  background: var(--surface);
+  color: var(--fg);
 }
 </style>

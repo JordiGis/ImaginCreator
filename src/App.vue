@@ -30,6 +30,15 @@
           <span>Personajes</span>
         </button>
         <button
+          :class="['nav-tab', { active: viewMode === 'pony' }]"
+          role="tab"
+          :aria-selected="viewMode === 'pony'"
+          @click="viewMode = 'pony'"
+        >
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3.5 8.5C3.5 5 6 2.5 10 2.5s6.5 2.5 6.5 6c0 4.5-6.5 9-6.5 9S3.5 13 3.5 8.5z"/><circle cx="10" cy="8" r="1.5"/></svg>
+          <span>Pony NSFW</span>
+        </button>
+        <button
           :class="['nav-tab', { active: viewMode === 'gallery' }]"
           role="tab"
           :aria-selected="viewMode === 'gallery'"
@@ -95,13 +104,14 @@
             <div class="message-bubble">
               <div class="text">{{ msg.text }}</div>
               <div v-if="msg.images && msg.images.length" class="image-previews">
-                <img
-                  v-for="(img, j) in msg.images"
-                  :key="j"
-                  :src="img.dataUrl || `/img/${img.file}`"
-                  :alt="`Image ${j + 1}`"
-                  @click="openModal(img.dataUrl || `/img/${img.file}`)"
-                />
+                <div v-for="(img, j) in msg.images" :key="j" class="image-preview-wrapper">
+                  <img
+                    :src="img.dataUrl || `/img/${img.file}`"
+                    :alt="`Image ${j + 1}`"
+                    @click="openModal(img.dataUrl || `/img/${img.file}`)"
+                  />
+                  <button class="ref-btn" title="Usar como referencia" @click.stop="useAsRef(img.dataUrl || `/img/${img.file}`)">↩</button>
+                </div>
               </div>
             </div>
             <div v-if="msg.role === 'assistant'" class="message-meta">
@@ -128,6 +138,8 @@
           :disabled="api.generating.value"
           :estimated-cost="credit.estimatedCost(currentModel)"
           :model-key="currentModel"
+          :pending-attachments="pendingAttachments"
+          :translate-fn="api.translatePrompt"
           @send="handleSend"
           @update:model-key="setModel"
         />
@@ -138,6 +150,29 @@
         <CharacterConfigurator
           @send-to-chat="handleCharacterToChat"
           @open-gallery="viewMode = 'gallery'"
+        />
+      </div>
+
+      <!-- ===== Pony NSFW view ===== -->
+      <div v-if="viewMode === 'pony'" class="view-container active">
+        <div class="pony-subnav">
+          <button
+            :class="['pony-subtab', { active: ponySubView === 'config' }]"
+            @click="ponySubView = 'config'"
+          >
+            🎛️ Configurador
+          </button>
+          <button
+            :class="['pony-subtab', { active: ponySubView === 'chat' }]"
+            @click="ponySubView = 'chat'"
+          >
+            🤖 Chat IA (DeepSeek)
+          </button>
+        </div>
+        <PonyConfigurator v-show="ponySubView === 'config'" />
+        <PonyChat
+          v-show="ponySubView === 'chat'"
+          @apply-tags="handlePonyApplyTags"
         />
       </div>
 
@@ -161,6 +196,8 @@ import PromptInput from './components/PromptInput.vue'
 import ImageModal from './components/ImageModal.vue'
 import ImageGallery from './components/ImageGallery.vue'
 import CharacterConfigurator from './components/CharacterConfigurator.vue'
+import PonyConfigurator from './components/PonyConfigurator.vue'
+import PonyChat from './components/PonyChat.vue'
 import { useApi } from './composables/useApi.js'
 import { useCreditTracker } from './composables/useCreditTracker.js'
 import { useChatStore } from './composables/useChatStore.js'
@@ -170,6 +207,7 @@ const api = useApi()
 const credit = useCreditTracker()
 
 const viewMode = ref('chat')
+const ponySubView = ref('config')
 
 const {
   currentModel,
@@ -193,6 +231,23 @@ const suggestions = [
   'logo minimalista para startup de IA',
 ]
 
+const pendingAttachments = ref([])
+
+function useAsRef(src) {
+  fetch(src)
+    .then(r => r.blob())
+    .then(blob => new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        pendingAttachments.value.push(reader.result)
+        resolve()
+      }
+      reader.onerror = reject
+      reader.readAsDataURL(blob)
+    }))
+    .catch(() => pendingAttachments.value.push(src))
+}
+
 function openModal(src) {
   modalSrc.value = src
   modalOpen.value = true
@@ -207,18 +262,52 @@ function handleNewChat() {
   newChat()
 }
 
-async function handleSend({ prompt, images }) {
+async function handleSend({ prompt, images, systemPrompt }) {
+  // Build conversation context from recent messages
+  const contextParts = []
+  const msgs = messages.value
+  for (const msg of msgs.slice(-6)) {
+    if (msg.role === 'user' && msg.text && msg.text !== '(imagen adjunta)') {
+      contextParts.push(`User: ${msg.text}`)
+    } else if (msg.role === 'assistant' && msg.text && !msg.text.startsWith('Error')) {
+      contextParts.push(`Assistant: ${msg.text}`)
+    }
+  }
+  let historyCtx = ''
+  if (contextParts.length > 2) {
+    historyCtx = `[Conversation history:\n${contextParts.join('\n')}\n]`
+  }
+
+  // Auto-attach last generated image if user didn't attach images
+  let finalImages = [...images]
+  if (!finalImages.length) {
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const m = msgs[i]
+      if (m.role === 'assistant' && m.images?.length) {
+        const last = m.images[m.images.length - 1]
+        const src = last.dataUrl
+        if (src && finalImages.length < 4) {
+          finalImages.push(src)
+        }
+        break
+      }
+    }
+  }
+
   const userKey = ++msgCounter
 
   addMessage({
     _id: `user-${userKey}`,
     role: 'user',
     text: prompt || '(imagen adjunta)',
-    images: images.map((d) => ({ dataUrl: d })),
+    images: finalImages.map((d) => ({ dataUrl: d })),
   })
 
+  // Prepend history context to prompt
+  const fullPrompt = historyCtx ? `${historyCtx}\n\nCurrent request: ${prompt || ''}`.trim() : (prompt || '')
+
   try {
-    const result = await api.generateImage(prompt, currentModel.value, images)
+    const result = await api.generateImage(fullPrompt, currentModel.value, finalImages, systemPrompt)
     const aiKey = ++msgCounter
 
     addMessage({
@@ -251,6 +340,11 @@ async function handleSend({ prompt, images }) {
       chatRef.value.scrollTop = chatRef.value.scrollHeight
     }
   }, 50)
+}
+
+function handlePonyApplyTags(tags) {
+  // Switch to configurator tab — user can paste tags in "Tags adicionales"
+  ponySubView.value = 'config'
 }
 
 function handleCharacterToChat(charResult) {
@@ -566,7 +660,12 @@ html, body {
   flex-wrap: wrap;
 }
 
-.image-previews img {
+.image-preview-wrapper {
+  position: relative;
+  width: 80px; height: 80px;
+}
+
+.image-preview-wrapper img {
   width: 80px; height: 80px;
   object-fit: cover;
   border-radius: var(--radius-sm);
@@ -575,8 +674,36 @@ html, body {
   transition: transform 0.1s;
 }
 
-.image-previews img:hover {
+.image-preview-wrapper img:hover {
   transform: scale(1.05);
+}
+
+.ref-btn {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  width: 20px;
+  height: 20px;
+  background: var(--accent);
+  border: 2px solid var(--bg-deep);
+  border-radius: 50%;
+  color: #fff;
+  font-size: 11px;
+  cursor: pointer;
+  display: none;
+  place-content: center;
+  padding: 0;
+  line-height: 1;
+  transition: background 0.1s;
+  z-index: 2;
+}
+
+.image-preview-wrapper:hover .ref-btn {
+  display: grid;
+}
+
+.ref-btn:hover {
+  background: var(--accent-hover);
 }
 
 .message-meta {
@@ -631,6 +758,38 @@ html, body {
 .chat-messages::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 3px;
+}
+
+/* ── Pony sub-nav ── */
+.pony-subnav {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+
+.pony-subtab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 12px 24px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.pony-subtab:hover {
+  color: var(--fg);
+  background: var(--surface-2);
+}
+
+.pony-subtab.active {
+  color: #ff5282;
+  border-bottom-color: #ff5282;
 }
 
 /* ── Responsive ── */
