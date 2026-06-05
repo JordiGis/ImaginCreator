@@ -97,6 +97,12 @@ import { useCreditTracker } from '../composables/useCreditTracker.js'
 
 const CHAR_MODEL_KEY = 'recraft-v41'
 
+import { useRouter } from 'vue-router'
+import { useChatStore } from '../composables/useChatStore.js'
+
+const router = useRouter()
+const { setModel, addMessage, currentSessionId } = useChatStore()
+
 const api = useApi()
 const credit = useCreditTracker()
 
@@ -339,16 +345,27 @@ function previewResult() {
   }
 }
 
-const emit = defineEmits(['send-to-chat', 'open-gallery'])
-
 function sendToChat() {
   if (result.value) {
-    emit('send-to-chat', result.value)
+    setModel('recraft-v41')
+    addMessage({
+      _id: `char-${Date.now()}`,
+      role: 'assistant',
+      text: result.value.prompt || 'Personaje generado',
+      images: result.value.imageUrl ? [{ dataUrl: result.value.imageUrl }] : [],
+      info: {
+        model: result.value.model || 'Recraft V4.1',
+        cost: result.value.cost || '0',
+        tokens: result.value.tokens || 0,
+        cached: result.value.cached || false,
+      },
+    })
+    router.push(currentSessionId.value ? `/chat/${currentSessionId.value}` : '/chat')
   }
 }
 
 function openInGallery() {
-  emit('open-gallery')
+  router.push('/gallery')
 }
 </script>
 

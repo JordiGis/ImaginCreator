@@ -98,7 +98,7 @@ async function handleRequest(req, res) {
   // POST /api/generate — generate image
   if (method === 'POST' && url.pathname === '/api/generate') {
     try {
-      const { prompt, modelKey, images, systemPrompt } = await parseBody(req)
+      const { prompt, modelKey, images } = await parseBody(req)
       const hasImages = Array.isArray(images) && images.length
       if (hasImages) {
         console.log(`📎 ${images.length} image(s) attached, total ~${(JSON.stringify(images).length / 1024).toFixed(0)}KB`)
@@ -107,12 +107,10 @@ async function handleRequest(req, res) {
 
       const model = getModel(modelKey)
 
-      // Check cache first (credit optimization!) — skip if images attached or systemPrompt varies
-      const hasSystemPrompt = systemPrompt && systemPrompt.trim()
-      if (!hasImages && !hasSystemPrompt) {
+      // Check cache first — skip if images attached
+      if (!hasImages) {
         const cached = checkPromptCache(prompt, modelKey)
         if (cached.hit) {
-          // Return cached result — no API call
           return json(res, 200, {
             images: [{ file: `${cached.hash}.png`, dataUrl: cached.dataUrl }],
             text: '(cached)',
@@ -143,13 +141,9 @@ async function handleRequest(req, res) {
         }
       }
 
-      // Build messages array — prepend system prompt (user override > model default > none)
-      const effectiveSystem = (systemPrompt && systemPrompt.trim()) || model.defaultSystemPrompt || ''
-      const messages = []
-      if (effectiveSystem) {
-        messages.push({ role: 'system', content: effectiveSystem })
-      }
-      messages.push({ role: 'user', content: userContent })
+      const messages = [
+        { role: 'user', content: userContent }
+      ]
 
       // Call OpenRouter — newer models need modalities: ["image"]
       const result = await callApi({

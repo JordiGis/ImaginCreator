@@ -11,45 +11,64 @@
       </div>
 
       <nav class="nav-tabs" role="tablist">
-        <button
-          :class="['nav-tab', { active: viewMode === 'chat' }]"
-          role="tab"
-          :aria-selected="viewMode === 'chat'"
-          @click="viewMode = 'chat'"
-        >
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 3h14a2 2 0 012 2v10a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2z"/></svg>
-          <span>Chat</span>
-        </button>
-        <button
-          :class="['nav-tab', { active: viewMode === 'character' }]"
-          role="tab"
-          :aria-selected="viewMode === 'character'"
-          @click="viewMode = 'character'"
+        <div class="nav-tab-wrapper">
+          <router-link
+            to="/chat"
+            :class="['nav-tab', { active: $route.path.startsWith('/chat') }]"
+            @click="toggleChats"
+          >
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 3h14a2 2 0 012 2v10a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2z"/></svg>
+            <span style="flex: 1">Chats</span>
+            <button class="new-chat-icon-btn" @click.stop.prevent="handleNewChat" title="Nuevo chat">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M10 4v12M4 10h12"/></svg>
+            </button>
+            <svg :class="['chevron', { open: chatsOpen && $route.path.startsWith('/chat') }]" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; height: 16px;"><path d="M6 8l4 4 4-4"/></svg>
+          </router-link>
+        </div>
+
+        <div v-show="$route.path.startsWith('/chat') && chatsOpen" class="session-list">
+           <router-link
+             v-for="s in sessions.slice(0, 5)"
+             :key="s.id"
+             :to="`/chat/${s.id}`"
+             class="session-item"
+             active-class="active"
+             exact-active-class="active"
+           >
+             <span class="session-title">{{ s.title }}</span>
+             <button class="delete-session" @click.prevent="deleteSession(s.id)" title="Eliminar">×</button>
+           </router-link>
+        </div>
+
+        <router-link
+          to="/character"
+          class="nav-tab"
+          active-class="active"
         >
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="10" cy="7" r="3"/><path d="M3 17c0-4 3.13-6 7-6s7 2 7 6"/></svg>
           <span>Personajes</span>
-        </button>
-        <button
-          :class="['nav-tab', { active: viewMode === 'pony' }]"
-          role="tab"
-          :aria-selected="viewMode === 'pony'"
-          @click="viewMode = 'pony'"
+        </router-link>
+        
+        <router-link
+          to="/pony"
+          class="nav-tab"
+          active-class="active"
         >
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3.5 8.5C3.5 5 6 2.5 10 2.5s6.5 2.5 6.5 6c0 4.5-6.5 9-6.5 9S3.5 13 3.5 8.5z"/><circle cx="10" cy="8" r="1.5"/></svg>
           <span>Pony NSFW</span>
-        </button>
-        <button
-          :class="['nav-tab', { active: viewMode === 'gallery' }]"
-          role="tab"
-          :aria-selected="viewMode === 'gallery'"
-          @click="viewMode = 'gallery'"
+        </router-link>
+        
+        <router-link
+          to="/gallery"
+          class="nav-tab"
+          active-class="active"
         >
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="2" width="6" height="6"/><rect x="12" y="2" width="6" height="6"/><rect x="2" y="12" width="6" height="6"/><rect x="12" y="12" width="6" height="6"/></svg>
           <span>Galería</span>
-        </button>
+        </router-link>
       </nav>
 
-      <ModelSelector :model-value="currentModel" @update:model-value="setModel" />
+      <ModelSelector v-if="$route.path.startsWith('/chat')" :model-value="currentModel" @update:model-value="setModel" />
 
       <CostDashboard
         :total-cost="credit.totalCost.value"
@@ -68,318 +87,53 @@
 
     <!-- ===== Main content ===== -->
     <main class="main">
-
-      <!-- ===== Chat view ===== -->
-      <div v-if="viewMode === 'chat'" class="view-container active">
-        <div class="chat-header">
-          <h2>Chat</h2>
-          <button class="new-chat-btn" @click="handleNewChat">+ Nuevo chat</button>
-        </div>
-
-        <div class="chat-messages" ref="chatRef">
-          <!-- Empty state -->
-          <div v-if="!hasMessages()" class="empty-state">
-            <svg viewBox="0 0 60 60" fill="none" stroke="currentColor" stroke-width="1.5">
-              <rect x="10" y="10" width="40" height="40" rx="8"></rect>
-              <circle cx="30" cy="28" r="8"></circle>
-              <path d="M18 44l6-12 8 8 8-16 8 20"></path>
-            </svg>
-            <h2>¿Qué quieres crear hoy?</h2>
-            <div class="suggestions">
-              <span
-                v-for="s in suggestions"
-                :key="s"
-                class="suggestion-chip"
-                @click="useSuggestion(s)"
-              >{{ s }}</span>
-            </div>
-          </div>
-
-          <!-- Messages -->
-          <div
-            v-for="msg in messages"
-            :key="msg._id"
-            :class="['message', msg.role === 'user' ? 'user' : 'ai']"
-          >
-            <div class="message-bubble">
-              <div class="text">{{ msg.text }}</div>
-              <div v-if="msg.images && msg.images.length" class="image-previews">
-                <div v-for="(img, j) in msg.images" :key="j" class="image-preview-wrapper">
-                  <img
-                    :src="img.dataUrl || `/img/${img.file}`"
-                    :alt="`Image ${j + 1}`"
-                    @click="openModal(img.dataUrl || `/img/${img.file}`)"
-                  />
-                  <button class="ref-btn" title="Usar como referencia" @click.stop="useAsRef(img.dataUrl || `/img/${img.file}`)">↩</button>
-                </div>
-              </div>
-            </div>
-            <div v-if="msg.role === 'assistant'" class="message-meta">
-              <span v-if="msg.info">{{ msg.info.model }}</span>
-              <span v-if="msg.info">·</span>
-              <span v-if="msg.info && msg.info.cached" class="cache-badge">🆓 Caché</span>
-              <span v-if="msg.info && !msg.info.cached">${{ msg.info.cost }}</span>
-              <span v-if="msg.info">· {{ msg.info.tokens }} tokens</span>
-            </div>
-          </div>
-
-          <!-- Generating indicator -->
-          <div v-if="api.generating.value" class="message ai">
-            <div class="message-bubble">
-              <div class="generating">
-                <div class="spinner"></div>
-                <span>Generando...</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <PromptInput
-          :disabled="api.generating.value"
-          :estimated-cost="credit.estimatedCost(currentModel)"
-          :model-key="currentModel"
-          :pending-attachments="pendingAttachments"
-          :translate-fn="api.translatePrompt"
-          @send="handleSend"
-          @update:model-key="setModel"
-        />
-      </div>
-
-      <!-- ===== Character Creator view ===== -->
-      <div v-if="viewMode === 'character'" class="view-container active">
-        <CharacterConfigurator
-          @send-to-chat="handleCharacterToChat"
-          @open-gallery="viewMode = 'gallery'"
-        />
-      </div>
-
-      <!-- ===== Pony NSFW view ===== -->
-      <div v-if="viewMode === 'pony'" class="view-container active">
-        <div class="pony-subnav">
-          <button
-            :class="['pony-subtab', { active: ponySubView === 'config' }]"
-            @click="ponySubView = 'config'"
-          >
-            🎛️ Configurador
-          </button>
-          <button
-            :class="['pony-subtab', { active: ponySubView === 'chat' }]"
-            @click="ponySubView = 'chat'"
-          >
-            🤖 Chat IA (DeepSeek)
-          </button>
-        </div>
-        <PonyConfigurator v-show="ponySubView === 'config'" />
-        <PonyChat
-          v-show="ponySubView === 'chat'"
-          @apply-tags="handlePonyApplyTags"
-        />
-      </div>
-
-      <!-- ===== Gallery view ===== -->
-      <div v-if="viewMode === 'gallery'" class="view-container active">
-        <ImageGallery :show="viewMode === 'gallery'" @preview="openModal" />
-      </div>
-
+      <router-view />
     </main>
-
-    <!-- ===== Lightbox ===== -->
-    <ImageModal :src="modalSrc" :show="modalOpen" @close="modalOpen = false" />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import ModelSelector from './components/ModelSelector.vue'
 import CostDashboard from './components/CostDashboard.vue'
-import PromptInput from './components/PromptInput.vue'
-import ImageModal from './components/ImageModal.vue'
-import ImageGallery from './components/ImageGallery.vue'
-import CharacterConfigurator from './components/CharacterConfigurator.vue'
-import PonyConfigurator from './components/PonyConfigurator.vue'
-import PonyChat from './components/PonyChat.vue'
 import { useApi } from './composables/useApi.js'
 import { useCreditTracker } from './composables/useCreditTracker.js'
 import { useChatStore } from './composables/useChatStore.js'
-import { getModel } from './config/models.js'
 
+const route = useRoute()
+const router = useRouter()
 const api = useApi()
 const credit = useCreditTracker()
 
-const viewMode = ref('chat')
-const ponySubView = ref('config')
+const chatsOpen = ref(true)
 
 const {
   currentModel,
   setModel,
-  messages,
-  addMessage,
-  newChat,
-  hasMessages,
+  sessions,
+  deleteSession,
+  newChat
 } = useChatStore()
 
-const modalSrc = ref('')
-const modalOpen = ref(false)
-const chatRef = ref(null)
-
-let msgCounter = 0
-
-const suggestions = [
-  'un gato astronauta en el espacio, estilo cyberpunk',
-  'retrato de un elfo guerrero con armadura dorada',
-  'paisaje surrealista con ríos de lava',
-  'logo minimalista para startup de IA',
-]
-
-const pendingAttachments = ref([])
-
-function useAsRef(src) {
-  fetch(src)
-    .then(r => r.blob())
-    .then(blob => new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => {
-        pendingAttachments.value.push(reader.result)
-        resolve()
-      }
-      reader.onerror = reject
-      reader.readAsDataURL(blob)
-    }))
-    .catch(() => pendingAttachments.value.push(src))
-}
-
-function openModal(src) {
-  modalSrc.value = src
-  modalOpen.value = true
-}
-
-function useSuggestion(text) {
-  // Fill prompt and immediately send
-  handleSend({ prompt: text, images: [] })
+function toggleChats(e) {
+  if (route.path.startsWith('/chat')) {
+    e.preventDefault()
+    chatsOpen.value = !chatsOpen.value
+  } else {
+    chatsOpen.value = true
+  }
 }
 
 function handleNewChat() {
-  newChat()
-}
-
-async function handleSend({ prompt, images, systemPrompt }) {
-  // Build conversation context from recent messages
-  const contextParts = []
-  const msgs = messages.value
-  for (const msg of msgs.slice(-6)) {
-    if (msg.role === 'user' && msg.text && msg.text !== '(imagen adjunta)') {
-      contextParts.push(`User: ${msg.text}`)
-    } else if (msg.role === 'assistant' && msg.text && !msg.text.startsWith('Error')) {
-      contextParts.push(`Assistant: ${msg.text}`)
-    }
-  }
-  let historyCtx = ''
-  if (contextParts.length > 2) {
-    historyCtx = `[Conversation history:\n${contextParts.join('\n')}\n]`
-  }
-
-  // Auto-attach last generated image if user didn't attach images
-  let finalImages = [...images]
-  if (!finalImages.length) {
-    for (let i = msgs.length - 1; i >= 0; i--) {
-      const m = msgs[i]
-      if (m.role === 'assistant' && m.images?.length) {
-        const last = m.images[m.images.length - 1]
-        const src = last.dataUrl
-        if (src && finalImages.length < 4) {
-          finalImages.push(src)
-        }
-        break
-      }
-    }
-  }
-
-  const userKey = ++msgCounter
-
-  addMessage({
-    _id: `user-${userKey}`,
-    role: 'user',
-    text: prompt || '(imagen adjunta)',
-    images: finalImages.map((d) => ({ dataUrl: d })),
-  })
-
-  // Prepend history context to prompt
-  const fullPrompt = historyCtx ? `${historyCtx}\n\nCurrent request: ${prompt || ''}`.trim() : (prompt || '')
-
-  try {
-    const result = await api.generateImage(fullPrompt, currentModel.value, finalImages, systemPrompt)
-    const aiKey = ++msgCounter
-
-    addMessage({
-      _id: `ai-${aiKey}`,
-      role: 'assistant',
-      text: result.cached
-        ? 'Imagen servida desde caché (sin coste)'
-        : result.text || '',
-      images: result.images || [],
-      info: {
-        model: result.model,
-        cost: result.cost,
-        tokens: (result.usage?.prompt || 0) + (result.usage?.output || 0),
-        cached: result.cached,
-      },
-    })
-
-    credit.addGeneration(result)
-  } catch (e) {
-    addMessage({
-      _id: `err-${++msgCounter}`,
-      role: 'assistant',
-      text: `Error: ${e.message}`,
-      images: [],
-    })
-  }
-
-  setTimeout(() => {
-    if (chatRef.value) {
-      chatRef.value.scrollTop = chatRef.value.scrollHeight
-    }
-  }, 50)
-}
-
-function handlePonyApplyTags(tags) {
-  // Switch to configurator tab — user can paste tags in "Tags adicionales"
-  ponySubView.value = 'config'
-}
-
-function handleCharacterToChat(charResult) {
-  viewMode.value = 'chat'
-  setModel('recraft-v41')
-  const aiKey = ++msgCounter
-  addMessage({
-    _id: `char-${aiKey}`,
-    role: 'assistant',
-    text: charResult.prompt || 'Personaje generado',
-    images: charResult.imageUrl ? [{ dataUrl: charResult.imageUrl }] : [],
-    info: {
-      model: charResult.model || 'Recraft V4.1',
-      cost: charResult.cost || '0',
-      tokens: charResult.tokens || 0,
-      cached: charResult.cached || false,
-    },
-  })
+  const id = newChat()
+  router.push('/chat/' + id)
+  chatsOpen.value = true
 }
 
 onMounted(() => {
   credit.loadStats()
-  api
-    .fetchImages()
-    .then((imgs) => {
-      if (imgs.length > 0 && !hasMessages()) {
-        addMessage({
-          _id: 'greeting',
-          role: 'assistant',
-          text: `Hay ${imgs.length} imágenes guardadas. Explóralas en la galería o genera una nueva.`,
-          images: [],
-        })
-      }
-    })
-    .catch(() => {})
+  api.fetchImages().catch(() => {})
 })
 </script>
 
@@ -480,6 +234,7 @@ html, body {
   font-size: 14px;
   text-align: left;
   width: 100%;
+  text-decoration: none;
 }
 
 .nav-tab:hover { background: var(--surface-2); color: var(--fg); }
@@ -495,6 +250,98 @@ html, body {
   opacity: 0.7;
 }
 .nav-tab.active svg { opacity: 1; }
+
+.new-chat-icon-btn {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.6;
+  transition: all 0.15s;
+}
+.new-chat-icon-btn:hover {
+  opacity: 1;
+  background: var(--surface-2);
+}
+.new-chat-icon-btn svg {
+  width: 16px;
+  height: 16px;
+}
+.chevron {
+  transition: transform 0.2s;
+  opacity: 0.7;
+}
+.chevron.open {
+  transform: rotate(180deg);
+}
+
+/* ── Session List ── */
+.session-list {
+  display: flex;
+  flex-direction: column;
+  margin-top: 4px;
+  margin-bottom: 12px;
+  margin-left: 20px;
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+  gap: 2px;
+}
+
+.session-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 13px;
+  transition: all 0.15s;
+}
+
+.session-item:hover {
+  background: var(--surface-2);
+  color: var(--fg);
+}
+
+.session-item.active {
+  color: var(--accent);
+  background: var(--surface-2);
+  font-weight: 500;
+}
+
+.session-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.delete-session {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  padding: 0 4px;
+}
+
+.session-item:hover .delete-session {
+  opacity: 1;
+}
+
+.delete-session:hover {
+  color: #ff5252;
+}
+
 
 /* ── Sidebar Footer ── */
 .sidebar-footer {
@@ -803,7 +650,8 @@ html, body {
   .nav-tab span,
   .model-selector,
   .cost-dashboard,
-  .sidebar-footer {
+  .sidebar-footer,
+  .session-list {
     display: none;
   }
   .nav-tab {

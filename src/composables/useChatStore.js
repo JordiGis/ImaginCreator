@@ -1,75 +1,131 @@
 import { reactive, computed, toRef } from 'vue'
 import { MODELS } from '../config/models.js'
 
-/**
- * Single reactive state object — no module-level refs, no watchers.
- * Current-model messages derived via computed.
- * Nothing shared between ref and store (no circular deps).
- */
-
 const modelKeys = new Set(MODELS.map((m) => m.key))
 
-function getModelFromUrl() {
-  const p = new URLSearchParams(location.search)
-  const m = p.get('model')
-  return m && modelKeys.has(m) ? m : null
+function generateId() {
+  return Date.now().toString(36) + Math.random().toString(36).substring(2, 8)
 }
 
-function syncModelToUrl(model) {
-  const url = new URL(location)
-  url.searchParams.set('model', model)
-  history.replaceState({}, '', url)
+function loadSessions() {
+  try {
+    const data = localStorage.getItem('imagin-chat-sessions')
+    if (data) return JSON.parse(data)
+  } catch (e) {
+    console.error('Failed to load chat sessions', e)
+  }
+  return []
 }
 
-const initialModel = getModelFromUrl() || MODELS[0].key
-if (!getModelFromUrl()) syncModelToUrl(initialModel)
+function saveSessions(sessions) {
+  try {
+    localStorage.setItem('imagin-chat-sessions', JSON.stringify(sessions))
+  } catch (e) {
+    console.error('Failed to save chat sessions', e)
+  }
+}
 
 const store = reactive({
-  currentModel: initialModel,
-  /** Record<modelKey, Message[]> */
-  messageMap: {},
+  currentModel: MODELS[0].key,
+  currentSessionId: null,
+  sessions: loadSessions(),
 })
 
-// Seed initial model
-if (!store.messageMap[initialModel]) {
-  store.messageMap[initialModel] = []
+// Initialize with an empty session if none exists
+if (store.sessions.length === 0) {
+  const initialSession = {
+    id: generateId(),
+    title: 'Nuevo chat',
+    model: MODELS[0].key,
+    messages: [],
+    updatedAt: Date.now()
+  }
+  store.sessions.push(initialSession)
+  store.currentSessionId = initialSession.id
+  saveSessions(store.sessions)
+} else if (!store.currentSessionId) {
+  // Sort by updatedAt descending
+  store.sessions.sort((a, b) => b.updatedAt - a.updatedAt)
+  store.currentSessionId = store.sessions[0].id
+  store.currentModel = store.sessions[0].model || MODELS[0].key
 }
 
 export function useChatStore() {
-  /**
-   * Computed — reads from reactive store at access time.
-   * When currentModel changes this re-evaluates → returns the correct model's array.
-   * Adding messages mutates the reactive array (triggers template re-render).
-   * No shared references between different sources of truth.
-   */
-  const messages = computed(() => store.messageMap[store.currentModel] || [])
+  const currentSession = computed(() => {
+    return store.sessions.find(s => s.id === store.currentSessionId) || store.sessions[0]
+  })
 
-  /** Expose currentModel as a ref-like for template auto-unwrap */
+  const messages = computed(() => currentSession.value?.messages || [])
   const currentModel = toRef(store, 'currentModel')
-
-  /* ── Actions ── */
+  const sessions = toRef(store, 'sessions')
 
   function setModel(model) {
-    if (!modelKeys.has(model) || model === store.currentModel) return
+    if (!modelKeys.has(model)) return
     store.currentModel = model
-    if (!store.messageMap[model]) {
-      store.messageMap[model] = []
+    if (currentSession.value) {
+      currentSession.value.model = model
+      currentSession.value.updatedAt = Date.now()
+      saveSessions(store.sessions)
     }
-    syncModelToUrl(model)
   }
 
   function addMessage(msg) {
-    const arr = store.messageMap[store.currentModel]
-    if (arr) arr.push(msg)
+    if (currentSession.value) {
+      currentSession.value.messages.push(msg)
+      currentSession.value.updatedAt = Date.now()
+      
+      // Auto-generate title from first user message
+      if (currentSession.value.messages.length === 1 && msg.role === 'user') {
+        const text = msg.text || 'Imagen'
+        currentSession.value.title = text.length > 30 ? text.substring(0, 30) + '...' : text
+      }
+      
+      saveSessions(store.sessions)
+    }
   }
 
   function newChat() {
-    store.messageMap[store.currentModel] = []
+    const newSession = {
+      id: generateId(),
+      title: 'Nuevo chat',
+      model: store.currentModel,
+      messages: [],
+      updatedAt: Date.now()
+    }
+    store.sessions.unshift(newSession)
+    store.currentSessionId = newSession.id
+    saveSessions(store.sessions)
+    return newSession.id
+  }
+
+  function loadSession(id) {
+    const session = store.sessions.find(s => s.id === id)
+    if (session) {
+      store.currentSessionId = id
+      if (session.model && modelKeys.has(session.model)) {
+        store.currentModel = session.model
+      }
+      return true
+    }
+    return false
+  }
+  
+  function deleteSession(id) {
+    const index = store.sessions.findIndex(s => s.id === id)
+    if (index !== -1) {
+      store.sessions.splice(index, 1)
+      if (store.sessions.length === 0) {
+        newChat() // create at least one
+      } else if (store.currentSessionId === id) {
+        store.currentSessionId = store.sessions[0].id
+        store.currentModel = store.sessions[0].model
+      }
+      saveSessions(store.sessions)
+    }
   }
 
   function hasMessages() {
-    const arr = store.messageMap[store.currentModel]
-    return Boolean(arr && arr.length)
+    return messages.value.length > 0
   }
 
   return {
@@ -79,5 +135,9 @@ export function useChatStore() {
     addMessage,
     newChat,
     hasMessages,
+    sessions,
+    loadSession,
+    deleteSession,
+    currentSessionId: toRef(store, 'currentSessionId')
   }
 }

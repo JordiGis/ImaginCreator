@@ -1,5 +1,5 @@
 <template>
-  <div class="gallery-view" v-if="show">
+  <div class="gallery-view">
     <h2>Galería de imágenes</h2>
 
     <!-- Loading skeleton -->
@@ -36,42 +36,42 @@
         <div class="gallery-prompt">{{ img.prompt || '(sin prompt)' }}</div>
       </div>
     </div>
+
+    <!-- ===== Lightbox ===== -->
+    <ImageModal :src="modalSrc" :show="modalOpen" @close="modalOpen = false" />
   </div>
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
-
-const props = defineProps({
-  show: { type: Boolean, default: false },
-})
-
-const emit = defineEmits(['close', 'preview'])
+import { ref, watch, onMounted } from 'vue'
+import ImageModal from './ImageModal.vue'
 
 const images = ref([])
 const loading = ref(false)
+const modalSrc = ref('')
+const modalOpen = ref(false)
 
 function openPreview(img) {
-  emit('preview', img.dataUrl || `/img/${img.file}`)
+  modalSrc.value = img.dataUrl || `/img/${img.file}`
+  modalOpen.value = true
 }
 
-watch(
-  () => props.show,
-  async (val) => {
-    if (!val) return
-    loading.value = true
-    try {
-      const res = await fetch('/api/images')
-      const data = await res.json()
-      images.value = (data.images || []).reverse()
-    } catch {
-      images.value = []
-    } finally {
-      loading.value = false
-    }
-  },
-  { immediate: true }
-)
+async function fetchImages() {
+  loading.value = true
+  try {
+    const res = await fetch('/api/images')
+    const data = await res.json()
+    images.value = (data.images || []).reverse()
+  } catch {
+    images.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  fetchImages()
+})
 </script>
 
 <style scoped>
