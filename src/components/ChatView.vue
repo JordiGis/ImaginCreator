@@ -1,8 +1,8 @@
 <template>
   <div class="view-container active" style="position: relative; height: 100%;">
-    <div class="chat-header">
+    <div class="view-header">
       <h2>Chat</h2>
-      <div class="chat-header-actions">
+      <div class="view-header-actions">
         <button class="history-btn" @click="historyOpen = true">
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; height: 16px;"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l2.5 2.5"/></svg>
           Historial
@@ -293,11 +293,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.chat-header-actions {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
 
 .history-btn {
   background: var(--surface-2);

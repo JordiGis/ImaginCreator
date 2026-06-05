@@ -1,8 +1,11 @@
 <template>
-  <div class="gallery-view">
-    <h2>Galería de imágenes</h2>
+  <div class="view-container">
+    <div class="view-header">
+      <h2>Galería</h2>
+    </div>
 
-    <!-- Loading skeleton -->
+    <div class="gallery-content">
+      <!-- Loading skeleton -->
     <div v-if="loading" class="loading-skeleton">
       <div v-for="n in 8" :key="n" class="sk-card">
         <div class="sk-img"></div>
@@ -35,6 +38,7 @@
         />
         <div class="gallery-prompt">{{ img.prompt || '(sin prompt)' }}</div>
       </div>
+    </div>
     </div>
 
     <!-- ===== Lightbox ===== -->
@@ -75,19 +79,12 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.gallery-view {
+.gallery-content {
   padding: 24px 32px;
   overflow-y: auto;
   flex: 1;
   display: flex;
   flex-direction: column;
-}
-
-.gallery-view h2 {
-  font-size: 18px;
-  font-weight: 600;
-  margin-bottom: 20px;
-  color: var(--fg);
 }
 
 /* Loading skeleton */

@@ -370,22 +370,29 @@ html, body {
   flex-direction: column;
 }
 
-/* ── Chat view ── */
-.chat-header {
+/* ── View Header ── */
+.view-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 32px;
+  padding: 0 32px;
+  height: 64px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
   flex-shrink: 0;
   z-index: 2;
 }
 
-.chat-header h2 {
+.view-header h2 {
   font-size: 16px;
   font-weight: 600;
   color: var(--fg);
+}
+
+.view-header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
 }
 
 .new-chat-btn {
@@ -610,17 +617,18 @@ html, body {
 /* ── Pony sub-nav ── */
 .pony-subnav {
   display: flex;
-  gap: 0;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
+  gap: 4px;
+  background: var(--surface-2);
+  padding: 4px;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
 
 .pony-subtab {
   background: none;
   border: none;
-  border-bottom: 2px solid transparent;
-  padding: 12px 24px;
+  padding: 6px 12px;
+  border-radius: 4px;
   font-size: 13px;
   font-weight: 500;
   color: var(--muted);
@@ -631,12 +639,12 @@ html, body {
 
 .pony-subtab:hover {
   color: var(--fg);
-  background: var(--surface-2);
 }
 
 .pony-subtab.active {
-  color: #ff5282;
-  border-bottom-color: #ff5282;
+  background: var(--surface);
+  color: var(--fg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 /* ── Responsive ── */
@@ -659,7 +667,7 @@ html, body {
     padding: 10px;
   }
   .chat-messages,
-  .chat-header,
+  .view-header,
   .chat-input-area {
     padding-left: 16px !important;
     padding-right: 16px !important;

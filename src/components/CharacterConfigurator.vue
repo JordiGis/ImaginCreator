@@ -1,8 +1,24 @@
 <template>
-  <div class="char-layout">
-    <!-- ── Config Panel ── -->
-    <div class="char-config">
-      <h2>Configurador de personaje</h2>
+  <div class="view-container active" style="flex: 1; display: flex; flex-direction: column;">
+    <div class="view-header">
+      <h2>Personajes</h2>
+      <div class="view-header-actions">
+        <!-- Presets -->
+        <div class="char-presets">
+          <button class="btn-small" @click="savePreset">💾 Guardar</button>
+          <select v-model="selectedPreset" class="preset-select">
+            <option value="">— Cargar preset —</option>
+            <option v-for="name in presetNames" :key="name" :value="name">{{ name }}</option>
+          </select>
+          <button class="btn-small" @click="loadPreset" :disabled="!selectedPreset" title="Cargar">📂</button>
+          <button class="btn-small" @click="deletePreset" :disabled="!selectedPreset" title="Eliminar">🗑️</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="char-layout" style="flex: 1; overflow: hidden;">
+      <!-- ── Config Panel ── -->
+      <div class="char-config">
 
       <div
         v-for="cat in categories"
@@ -57,16 +73,6 @@
         </button>
       </div>
 
-      <!-- Presets -->
-      <div class="char-presets">
-        <button class="btn-small" @click="savePreset">💾 Guardar</button>
-        <select v-model="selectedPreset" class="preset-select">
-          <option value="">— Cargar preset —</option>
-          <option v-for="name in presetNames" :key="name" :value="name">{{ name }}</option>
-        </select>
-        <button class="btn-small" @click="loadPreset" :disabled="!selectedPreset" title="Cargar">📂</button>
-        <button class="btn-small" @click="deletePreset" :disabled="!selectedPreset" title="Eliminar">🗑️</button>
-      </div>
 
       <!-- Result -->
       <div v-if="result" :class="['char-result', { visible: true }]">
@@ -85,6 +91,7 @@
           </div>
         </template>
       </div>
+    </div>
     </div>
   </div>
 </template>
@@ -442,6 +449,12 @@ function openInGallery() {
   border-top: 1px solid var(--border);
   transition: max-height 0.25s ease, padding 0.25s ease;
   visibility: hidden;
+}
+
+.char-presets {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 .category.open .category-body {
