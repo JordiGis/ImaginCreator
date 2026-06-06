@@ -1,0 +1,15 @@
+{
+  "description": "LTX-Video 2B v0.9.1 — Image-to-Video. CheckpointLoaderSimple unificado + force-fp16 + cpu t5xxl. denoise=0.95 para estabilidad MPS.",
+  "prompt": {
+    "1": { "class_type": "LoadImage", "inputs": { "image": "cat_input.png" } },
+    "2": { "class_type": "CheckpointLoaderSimple", "inputs": { "ckpt_name": "ltx-video-2b-v0.9.1.safetensors" } },
+    "3": { "class_type": "CLIPLoader", "inputs": { "clip_name": "t5xxl_fp8_e4m3fn.safetensors", "type": "ltxv" } },
+    "4": { "class_type": "CLIPTextEncode", "inputs": { "clip": ["3", 0], "text": "score_9, score_8_up, cinematic video, highly detailed, a cute fluffy kitten playing with a wool ball on the floor, soft paws moving, warm lighting, hyperrealistic, sharp focus, continuous smooth motion" } },
+    "5": { "class_type": "CLIPTextEncode", "inputs": { "clip": ["3", 0], "text": "ugly, deformed, blurry, low quality, text, watermark, bad anatomy, distorted, disfigured, extra limbs, bad hands, static, no motion" } },
+    "6": { "class_type": "LTXVImgToVideo", "inputs": { "positive": ["4", 0], "negative": ["5", 0], "vae": ["2", 2], "image": ["1", 0], "width": 768, "height": 512, "length": 17, "batch_size": 1, "strength": 1.0 } },
+    "7": { "class_type": "ModelSamplingLTXV", "inputs": { "model": ["2", 0], "max_shift": 2.05, "base_shift": 0.95 } },
+    "8": { "class_type": "KSampler", "inputs": { "model": ["7", 0], "positive": ["6", 0], "negative": ["6", 1], "latent_image": ["6", 2], "seed": 12345, "steps": 20, "cfg": 2.0, "sampler_name": "euler", "scheduler": "simple", "denoise": 0.95 } },
+    "9": { "class_type": "VAEDecode", "inputs": { "samples": ["8", 0], "vae": ["2", 2] } },
+    "10": { "class_type": "SaveImage", "inputs": { "images": ["9", 0], "filename_prefix": "LTXVideo" } }
+  }
+}

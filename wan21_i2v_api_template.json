@@ -1,0 +1,114 @@
+{
+  "description": "Wan 2.1 I2V 14B FP8 — Image-to-Video. Cambia 'image', 'positive_prompt', 'seed' desde tu app.",
+  "prompt": {
+    "1": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "input_pony_image.png"
+      }
+    },
+    "2": {
+      "class_type": "CLIPVisionLoader",
+      "inputs": {
+        "clip_name": "open-clip-xlm-roberta-large-vit-huge-14_visual_fp16.safetensors"
+      }
+    },
+    "3": {
+      "class_type": "WanVideoModelLoader",
+      "inputs": {
+        "model": "Wan2_1-I2V-14B-480P_fp8_e4m3fn.safetensors",
+        "base_precision": "bf16",
+        "quantization": "disabled",
+        "load_device": "offload_device"
+      }
+    },
+    "4": {
+      "class_type": "LoadWanVideoT5TextEncoder",
+      "inputs": {
+        "model_name": "umt5-xxl-enc-fp8_e4m3fn.safetensors",
+        "precision": "bf16",
+        "load_device": "offload_device",
+        "quantization": "disabled"
+      }
+    },
+    "5": {
+      "class_type": "WanVideoVAELoader",
+      "inputs": {
+        "model_name": "Wan2_1_VAE_bf16.safetensors",
+        "precision": "bf16"
+      }
+    },
+    "6": {
+      "class_type": "WanVideoTextEncode",
+      "inputs": {
+        "positive_prompt": "score_9, score_8_up, cinematic video, highly detailed, dynamic scene, professional lighting, 4k quality, sharp focus",
+        "negative_prompt": "ugly, deformed, blurry, low quality, text, watermark, bad anatomy, distorted, disfigured",
+        "force_offload": false,
+        "t5": ["4", 0]
+      }
+    },
+    "7": {
+      "class_type": "WanVideoClipVisionEncode",
+      "inputs": {
+        "clip_vision": ["2", 0],
+        "image_1": ["1", 0],
+        "strength_1": 1.0,
+        "strength_2": 1.0,
+        "crop": "center",
+        "combine_embeds": "average",
+        "force_offload": true
+      }
+    },
+    "8": {
+      "class_type": "WanVideoImageToVideoEncode",
+      "inputs": {
+        "width": 832,
+        "height": 480,
+        "num_frames": 81,
+        "noise_aug_strength": 0.02,
+        "start_latent_strength": 0.9,
+        "end_latent_strength": 0.7,
+        "force_offload": true,
+        "vae": ["5", 0],
+        "clip_embeds": ["7", 0],
+        "start_image": ["1", 0],
+        "tiled_vae": false
+      }
+    },
+    "9": {
+      "class_type": "WanVideoSampler",
+      "inputs": {
+        "model": ["3", 0],
+        "image_embeds": ["8", 0],
+        "text_embeds": ["6", 0],
+        "steps": 30,
+        "cfg": 6.0,
+        "shift": 5.0,
+        "seed": 0,
+        "force_offload": true,
+        "scheduler": "unipc",
+        "riflex_freq_index": 0
+      }
+    },
+    "10": {
+      "class_type": "WanVideoDecode",
+      "inputs": {
+        "vae": ["5", 0],
+        "samples": ["9", 0],
+        "enable_vae_tiling": false,
+        "tile_x": 272,
+        "tile_y": 272,
+        "tile_stride_x": 144,
+        "tile_stride_y": 128,
+        "normalization": "default"
+      }
+    },
+    "11": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "images": ["10", 0],
+        "filename_prefix": "WanVideo"
+      }
+    }
+  }
+}

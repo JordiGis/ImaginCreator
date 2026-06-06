@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url'
 import { callApi } from './services/openrouter.js'
 import { saveImage, getAllImages, getStats, updateCost, serveImage } from './services/storage.js'
 import { getModel, getAllModels, checkPromptCache } from './services/cache.js'
+import { execSync, exec } from 'node:child_process'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -239,10 +240,13 @@ async function handleRequest(req, res) {
   // POST /api/pony/generate — generate image via local SD WebUI Pony model
   if (method === 'POST' && url.pathname === '/api/pony/generate') {
     try {
-      const { prompt, negativePrompt, params } = await parseBody(req)
+      const { prompt, negativePrompt, params, image } = await parseBody(req)
       if (!prompt || !prompt.trim()) return json(res, 400, { error: 'Prompt required' })
 
-      const body = JSON.stringify({
+      const isImg2Img = !!image;
+      const apiPath = isImg2Img ? '/sdapi/v1/img2img' : '/sdapi/v1/txt2img';
+
+      const bodyParams = {
         prompt: prompt.trim(),
         negative_prompt: negativePrompt || 'bad anatomy, ugly, distorted, low quality, worst quality',
         width: params?.width || 1024,
@@ -252,13 +256,20 @@ async function handleRequest(req, res) {
         sampler_name: params?.sampler || 'DPM++ 2M Karras',
         seed: params?.seed || -1,
         batch_size: 1,
-      })
+      };
+
+      if (isImg2Img) {
+        bodyParams.init_images = [image.replace(/^data:image\/[a-z]+;base64,/, '')];
+        bodyParams.denoising_strength = params?.denoising || 0.7;
+      }
+
+      const body = JSON.stringify(bodyParams)
 
       const sdResult = await new Promise((resolve, reject) => {
         const opts = {
           hostname: '127.0.0.1',
           port: 7860,
-          path: '/sdapi/v1/txt2img',
+          path: apiPath,
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -280,7 +291,8 @@ async function handleRequest(req, res) {
       })
 
       if (!sdResult.images?.length) {
-        return json(res, 500, { error: 'SD WebUI returned no images' })
+        const detail = sdResult.detail || sdResult.info?.slice(0, 300) || JSON.stringify(sdResult).slice(0, 300)
+        return json(res, 500, { error: 'SD WebUI returned no images', detail })
       }
 
       // Save the image
@@ -301,11 +313,196 @@ async function handleRequest(req, res) {
     }
   }
 
+  // ── Video Generation (Wan 2.1 I2V via ComfyUI) ──
+
+  const COMFYUI_DIR = path.resolve(__dirname, '../comfyui-backend')
+  const COMFYUI_INPUT = path.join(COMFYUI_DIR, 'input')
+  const COMFYUI_OUTPUT = path.join(COMFYUI_DIR, 'output')
+  const VIDEO_OUTPUT = path.join(COMFYUI_DIR, 'video_output')
+  const WAN_TEMPLATE = path.resolve(__dirname, '../wan22_5b_api_template.json')
+
+  if (!fs.existsSync(VIDEO_OUTPUT)) fs.mkdirSync(VIDEO_OUTPUT, { recursive: true })
+
+  // POST /api/pony/video/generate — queue I2V generation on ComfyUI
+  if (method === 'POST' && url.pathname === '/api/pony/video/generate') {
+    try {
+      const { image, positive_prompt, negative_prompt, seed, steps, cfg, num_frames } = await parseBody(req)
+      if (!image) return json(res, 400, { error: 'Base64 image required' })
+      if (!positive_prompt?.trim()) return json(res, 400, { error: 'positive_prompt required' })
+
+      const matches = image.match(/^data:image\/(png|jpeg|jpg);base64,(.+)$/)
+      if (!matches) return json(res, 400, { error: 'Invalid image format. Must be base64 data URL (PNG/JPEG).' })
+      const ext = matches[1] === 'jpeg' ? 'jpg' : 'png'
+      const buffer = Buffer.from(matches[2], 'base64')
+      const inputFilename = `wan_input_${Date.now()}.${ext}`
+      fs.writeFileSync(path.join(COMFYUI_INPUT, inputFilename), buffer)
+      console.log(`  [Video] Saved input frame: ${inputFilename}`)
+
+      const template = JSON.parse(fs.readFileSync(WAN_TEMPLATE, 'utf-8'))
+      const p = template.prompt
+      p['1'].inputs.image = inputFilename
+      p['6'].inputs.text = positive_prompt.trim()
+      p['7'].inputs.text = (negative_prompt || '').trim() || p['7'].inputs.text
+      p['9'].inputs.seed = seed != null ? seed : Math.floor(Math.random() * 2 ** 32)
+      if (steps) p['9'].inputs.steps = steps
+      if (cfg) p['9'].inputs.cfg = cfg
+      if (num_frames) p['5'].inputs.length = num_frames
+
+      const comfyBody = JSON.stringify({ prompt: p })
+      const result = await new Promise((resolve, reject) => {
+        const opts = {
+          hostname: '127.0.0.1', port: 8188, path: '/prompt', method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(comfyBody) }
+        }
+        const r = http.request(opts, (res) => {
+          let data = ''
+          res.on('data', c => (data += c))
+          res.on('end', () => { try { resolve(JSON.parse(data)) } catch { reject(new Error(`ComfyUI parse error: ${data.slice(0, 500)}`)) } })
+        })
+        r.on('error', e => reject(new Error(`ComfyUI connection failed: ${e.message}`)))
+        r.write(comfyBody)
+        r.end()
+      })
+
+      if (!result.prompt_id) return json(res, 500, { error: 'ComfyUI did not return a prompt_id', details: result })
+      console.log(`  [Video] Queued: ${result.prompt_id}`)
+      return json(res, 200, { prompt_id: result.prompt_id, status: 'queued', input_image: inputFilename })
+    } catch (e) {
+      console.error('❌ Video generate error:', e)
+      return json(res, 500, { error: String(e) })
+    }
+  }
+
+  // GET /api/pony/video/status/:promptId — poll generation status
+  if (method === 'GET' && url.pathname.startsWith('/api/pony/video/status/')) {
+    const promptId = url.pathname.split('/').pop()
+    if (!promptId) return json(res, 400, { error: 'promptId required' })
+
+    try {
+      const comfyResult = await new Promise((resolve, reject) => {
+        const opts = { hostname: '127.0.0.1', port: 8188, path: `/history/${promptId}`, method: 'GET' }
+        const r = http.request(opts, (res) => {
+          let data = ''
+          res.on('data', c => (data += c))
+          res.on('end', () => { try { resolve(JSON.parse(data)) } catch { reject(new Error(`ComfyUI history parse: ${data.slice(0, 500)}`)) } })
+        })
+        r.on('error', e => reject(new Error(`ComfyUI poll failed: ${e.message}`)))
+        r.end()
+      })
+
+      const entry = comfyResult[promptId]
+      if (!entry) return json(res, 200, { status: 'queued' })
+
+      if (entry.status?.status_str === 'error') {
+        const errMsgs = entry.status?.messages?.filter(m => m[0] === 'execution_error') || []
+        const errDetail = errMsgs.length ? errMsgs[0][1]?.exception_message || JSON.stringify(errMsgs[0][1]) : 'Unknown ComfyUI execution error'
+        console.error(`  [Video] Execution error: ${errDetail.slice(0, 200)}`)
+        return json(res, 200, { status: 'failed', error: errDetail })
+      }
+
+      if (entry.status?.completed) {
+        // Check SaveImage node (11) and fallback to WanVideoDecode (10)
+        const output = entry.outputs?.['11'] || entry.outputs?.['10']
+        const images = output?.images || []
+        if (images.length) {
+          const subfolder = images[0].subfolder || ''
+          const srcDir = path.join(COMFYUI_OUTPUT, subfolder)
+          const mp4Filename = `${promptId}.mp4`
+          const mp4Path = path.join(VIDEO_OUTPUT, mp4Filename)
+          let videoUrl = null
+
+          if (fs.existsSync(srcDir)) {
+            try {
+              execSync('which ffmpeg', { stdio: 'ignore' })
+              const frameFiles = fs.readdirSync(srcDir).filter(f => f.endsWith('.png')).sort()
+              if (frameFiles.length) {
+                const first = frameFiles[0]
+                const digits = first.match(/(\d+)/)
+                const padding = digits ? digits[1].length : 5
+                const pat = first.replace(/\d+/, `%0${padding}d`)
+                execSync(
+                  `ffmpeg -y -framerate 16 -i "${path.join(srcDir, pat)}" -c:v h264_videotoolbox -b:v 5M -pix_fmt yuv420p "${mp4Path}"`,
+                  { stdio: 'pipe', timeout: 300000 }
+                )
+                videoUrl = `/api/pony/video/output/${mp4Filename}`
+                console.log(`  [Video] MP4 created: ${mp4Filename} (${frameFiles.length} frames)`)
+              }
+            } catch {
+              if (images.length) videoUrl = `/api/pony/video/output/${subfolder}/${images[0].filename}`
+            }
+          }
+
+          return json(res, 200, {
+            status: 'completed',
+            total_frames: images.length,
+            frames: images.map(im => ({ url: `/api/pony/video/output/${subfolder}/${im.filename}`, filename: im.filename })),
+            video_url: videoUrl,
+            mp4_ready: !!videoUrl?.endsWith('.mp4')
+          })
+        }
+        return json(res, 200, { status: 'completed', output })
+      }
+
+      if (entry.status?.failed) {
+        return json(res, 200, { status: 'failed', error: JSON.stringify(entry.status.messages) })
+      }
+
+      return json(res, 200, { status: 'processing' })
+    } catch (e) {
+      console.error('❌ Video status error:', e)
+      return json(res, 500, { error: String(e) })
+    }
+  }
+
+  // GET /api/pony/video/output/:filename — serve video/frame files
+  if (method === 'GET' && url.pathname.startsWith('/api/pony/video/output/')) {
+    const filePath = url.pathname.replace('/api/pony/video/output/', '')
+    const mp4Path = path.join(VIDEO_OUTPUT, filePath)
+    const framePath = path.join(COMFYUI_OUTPUT, filePath)
+
+    if (fs.existsSync(mp4Path)) {
+      const stat = fs.statSync(mp4Path)
+      res.writeHead(200, {
+        'Content-Type': 'video/mp4', 'Content-Length': stat.size,
+        'Accept-Ranges': 'bytes', 'Cache-Control': 'public, max-age=86400'
+      })
+      fs.createReadStream(mp4Path).pipe(res)
+      return
+    }
+
+    if (fs.existsSync(framePath)) {
+      const ext = path.extname(framePath).toLowerCase()
+      const ct = ext === '.png' ? 'image/png' : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'application/octet-stream'
+      const stat = fs.statSync(framePath)
+      res.writeHead(200, { 'Content-Type': ct, 'Content-Length': stat.size, 'Cache-Control': 'public, max-age=86400' })
+      fs.createReadStream(framePath).pipe(res)
+      return
+    }
+
+    return json(res, 404, { error: 'File not found' })
+  }
+
   // POST /api/pony/chat — chat with DeepSeek Flash for Pony tag assistance
   if (method === 'POST' && url.pathname === '/api/pony/chat') {
     try {
-      const { messages, configContext, currentTags } = await parseBody(req)
+      const { messages, configContext, currentTags, images } = await parseBody(req)
       if (!messages?.length) return json(res, 400, { error: 'Messages required' })
+
+      // Multimodal: si hay imágenes, reformateamos el último mensaje como content array
+      const hasImages = Array.isArray(images) && images.length > 0
+      if (hasImages) {
+        const lastMsg = messages[messages.length - 1]
+        if (lastMsg && lastMsg.role === 'user') {
+          const content = []
+          if (lastMsg.content && typeof lastMsg.content === 'string') {
+            content.push({ type: 'text', text: lastMsg.content })
+          }
+          for (const img of images.slice(0, 6)) {
+            content.push({ type: 'image_url', image_url: { url: img } })
+          }
+          lastMsg.content = content
+        }
+      }
 
       // Build system prompt — base rules + config context + current tags
       let systemContent = `Eres un experto en Pony Diffusion V6 XL, un modelo de generación de imágenes que usa tags Danbooru.
@@ -339,25 +536,35 @@ El usuario va a escribir lo que QUIERE generar. Su petición tiene PRIORIDAD TOT
 
 TU TRABAJO ES:
 1. Lee lo que pide el usuario.
-2. Compara con la configuración actual (si se te ha dado).
-3. Si la configuración actual NO coincide con lo que pide el usuario, CÁMBIALA — no la mantengas.
-4. Si la configuración actual es compatible, mantenla pero ajústala.
-5. Si hacen falta tags adicionales que no están en las categorías del configurador, AÑÁDELOS como tags extra.
-6. NO tengas miedo de cambiar categorías enteras. Lo que importa es lo que el usuario quiere.
+2. Si el usuario pide un pequeño cambio (ej: "ponle pelo azul"), MANTÉN el resto de tags actuales y cambia solo el pelo, pero DEBES DEVOLVER LA LISTA COMPLETA DE TAGS.
+3. Si el usuario pide una escena totalmente nueva o distinta, IGNORA la configuración actual y genera una lista COMPLETA de tags desde cero.
+4. NUNCA asumas que guardaremos tags anteriores. Tu respuesta reemplazará por completo los tags actuales. ¡Escribe la lista completa de tags para la escena en cada respuesta!
 
-Ejemplo:
-- Config actual: rating:explicit, score_9, blonde_hair, blue_eyes, bed
-- Usuario dice: "pelirroja con coletas en la ducha"
-- Tu respuesta DEBE incluir: red_hair, twin_tails, shower (y quitar blonde_hair, blue_eyes, bed)
+Ejemplo 1 (Cambio pequeño):
+- Config actual: 1girl, blonde_hair, bed
+- Usuario: "ponle pelo azul"
+- Respuesta: rating:explicit, score_9, 1girl, blue_hair, bed, (masterpiece:1.2)
+
+Ejemplo 2 (Escena nueva):
+- Config actual: 1girl, blonde_hair, bed
+- Usuario: "dos chicos peleando en la calle"
+- Respuesta: rating:explicit, score_9, 2boys, fighting, outdoors, street, city, (masterpiece:1.2)
 - Tags que no cambian (rating, quality, emphasis): se mantienen
 
 REGLAS ADICIONALES:
 - Si es relevante, puedes sugerir un negative prompt con una línea que empiece por "NEG:" (sin comillas). Ejemplo: NEG: bad hands, extra fingers
 - Los tags que no estén en las categorías del configurador se añadirán automáticamente como raw tags.
-- Si el usuario pide "amplía" o "más tags", añade todos los tags Danbooru relevantes que se te ocurran.`
+- Si el usuario pide "amplía" o "más tags", añade todos los tags Danbooru relevantes que se te ocurran.
 
+ANÁLISIS DE IMAGEN (solo si el usuario adjunta una imagen):
+- Analiza la imagen que te envía el usuario y sugiere tags Danbooru que describan su contenido (personajes, vestimenta, pose, fondo, iluminación, expresión, etc.).
+- Describe TODO lo que veas en formato tags Danbooru — directamente los tags, sin decir "veo una imagen de...".
+- Si el usuario pide editar la imagen, genera tags que conserven los elementos existentes y modifiquen solo lo que pide.
+- Prioriza siempre lo que el usuario pide por texto sobre lo que ves en la imagen (el prompt del usuario manda).`
+
+      const chatModel = hasImages ? 'qwen/qwen3-vl-8b-instruct' : 'deepseek/deepseek-chat'
       const result = await callApi({
-        model: 'deepseek/deepseek-chat',
+        model: chatModel,
         messages: [
           { role: 'system', content: systemContent },
           ...messages

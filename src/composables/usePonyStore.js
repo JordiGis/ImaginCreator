@@ -133,43 +133,55 @@ function applyAiResponse(text) {
   }
 
   const result = parseTagStringToActions(cleanText, ponyState.selections)
+  const defaults = getDefaultSelections()
 
-  // Apply selection changes
   const changed = []
-  if (result.selections) {
-    for (const [catKey, newVal] of Object.entries(result.selections)) {
-      const cat = PONY_CATEGORIES.find(c => c.key === catKey)
-      if (!cat) continue
+  
+  // 1. Reset all categories to default if they are not present in result.selections
+  for (const cat of PONY_CATEGORIES) {
+    const isGlobal = ['rating', 'quality', 'emphasis'].includes(cat.key)
+    if (result.selections && result.selections[cat.key]) {
+      // LLM provided a value for this category
       if (cat.multi) {
-        // For multi-select, we replace with AI's suggestions
-        // but keep existing selections that aren't overridden
-        // Actually AI output for multi is tricky — let's add new ones
-        const existing = ponyState.selections[catKey]
-        const added = newVal.filter(nv => !existing.some(e => e.id === nv.id))
-        for (const item of added) {
-          existing.push(item)
+        const currentIds = ponyState.selections[cat.key].map(o => o.id).sort().join(',')
+        const newIds = result.selections[cat.key].map(o => o.id).sort().join(',')
+        if (currentIds !== newIds) {
+          // Replace completely instead of appending
+          ponyState.selections[cat.key].splice(0, ponyState.selections[cat.key].length, ...result.selections[cat.key])
+          changed.push(cat.key)
         }
-        if (added.length) changed.push(catKey)
       } else {
-        if (newVal && newVal.id !== ponyState.selections[catKey]?.id) {
-          ponyState.selections[catKey] = newVal
-          changed.push(catKey)
+        if (ponyState.selections[cat.key]?.id !== result.selections[cat.key].id) {
+          ponyState.selections[cat.key] = result.selections[cat.key]
+          changed.push(cat.key)
+        }
+      }
+    } else {
+      // LLM did NOT provide a value. Reset to default, UNLESS it's a global category
+      if (!isGlobal) {
+        if (cat.multi) {
+          if (ponyState.selections[cat.key].length > 0) {
+            ponyState.selections[cat.key].splice(0, ponyState.selections[cat.key].length)
+            changed.push(cat.key)
+          }
+        } else {
+          if (ponyState.selections[cat.key]?.id !== defaults[cat.key].id) {
+            ponyState.selections[cat.key] = defaults[cat.key]
+            changed.push(cat.key)
+          }
         }
       }
     }
   }
 
-  // Apply raw extra tags
+  // 2. Overwrite extra tags completely (instead of appending)
   let rawTagsAdded = []
-  if (result.extraTags?.length) {
-    const currentExtra = ponyState.extraTags ? ponyState.extraTags.split(',').map(t => t.trim()).filter(Boolean) : []
-    for (const tag of result.extraTags) {
-      if (!currentExtra.includes(tag)) {
-        currentExtra.push(tag)
-        rawTagsAdded.push(tag)
-      }
-    }
-    ponyState.extraTags = currentExtra.join(', ')
+  const newExtraTags = result.extraTags || []
+  const currentExtraTags = ponyState.extraTags ? ponyState.extraTags.split(',').map(t => t.trim()).filter(Boolean) : []
+  
+  if (newExtraTags.join(',') !== currentExtraTags.join(',')) {
+    ponyState.extraTags = newExtraTags.join(', ')
+    rawTagsAdded = newExtraTags
   }
 
   // Apply negative prompt if AI suggested one

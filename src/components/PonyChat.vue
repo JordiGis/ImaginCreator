@@ -62,6 +62,11 @@
           </div>
           <!-- Text message -->
           <div v-else class="pony-msg-text">{{ msg.content }}</div>
+          <!-- Image reference badge (user sent with image) -->
+          <div v-if="msg.hasImage" class="pony-msg-ref-badge">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+            Imagen de referencia
+          </div>
         </div>
       </div>
 
@@ -78,31 +83,54 @@
     </div>
 
     <!-- ── Input ── -->
-    <div class="pony-chat-input">
-      <textarea
-        v-model="inputText"
-        class="pony-chat-textarea"
-        placeholder="Describe tu escena en español… Ej: dos chicas en una ducha, una arrodillada…"
-        rows="2"
-        @keydown.enter.prevent="handleEnter"
-        :disabled="loading || generating"
-      ></textarea>
-      <div class="pony-chat-buttons">
-        <button
-          class="btn-generate"
-          @click="generate"
-          :disabled="generating || !currentTagString"
-          title="Generar imagen con los tags actuales"
-        >
-          <span v-if="generating" class="spinner"></span>
-          <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-          <span class="btn-label">Generar</span>
+    <div class="pony-chat-input-wrapper">
+      <div v-if="uploadedImage" class="chat-uploaded-image-preview">
+        <div class="chat-uploaded-image-inner">
+          <img :src="uploadedImage" />
+          <button class="remove-image-btn" @click="removeImage">✕</button>
+        </div>
+        <div class="chat-image-actions">
+          <button class="btn-analyze" @click="analyzeImage" :disabled="loading || generating" title="Analizar imagen y sugerir tags Danbooru">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            Analizar con IA
+          </button>
+          <div class="chat-denoising">
+            <label title="0 = Igual a la original | 1 = Completamente nueva">Denoising ({{ denoisingStrength.toFixed(2) }})</label>
+            <input type="range" v-model.number="denoisingStrength" min="0" max="1" step="0.05" />
+          </div>
+        </div>
+      </div>
+      <div class="pony-chat-input">
+        <button class="btn-upload-icon" @click="triggerFileInput" title="Subir imagen: el chat la analizará y el generador la usará como base">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
         </button>
-        <button class="btn-send" @click="sendMessage" :disabled="loading || generating || !inputText.trim()">
-          <span v-if="loading" class="spinner"></span>
-          <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-          <span class="btn-label">Enviar</span>
-        </button>
+        <input type="file" ref="fileInput" @change="handleFileUpload" accept="image/*" style="display: none;" />
+
+        <textarea
+          v-model="inputText"
+          class="pony-chat-textarea"
+          placeholder="Describe tu escena en español… Ej: dos chicas en una ducha, una arrodillada…"
+          rows="2"
+          @keydown.enter.prevent="handleEnter"
+          :disabled="loading || generating"
+        ></textarea>
+        <div class="pony-chat-buttons">
+          <button
+            class="btn-generate"
+            @click="generate"
+            :disabled="generating || !currentTagString"
+            :title="uploadedImage ? `Generar editando la imagen base (denoising ${denoisingStrength.toFixed(2)})` : 'Generar imagen con los tags actuales'"
+          >
+            <span v-if="generating" class="spinner"></span>
+            <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            <span class="btn-label">Generar</span>
+          </button>
+          <button class="btn-send" @click="sendMessage" :disabled="loading || generating || !inputText.trim()">
+            <span v-if="loading" class="spinner"></span>
+            <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            <span class="btn-label">Enviar</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -123,6 +151,10 @@ const loading = ref(false)
 const generating = ref(false)
 const showTagSummary = ref(true)
 const chatRef = ref(null)
+
+const fileInput = ref(null)
+const uploadedImage = ref(null)
+const denoisingStrength = ref(0.7)
 
 const suggestions = [
   'chica sumisa atada a una cama, vendada, con expresión de miedo y excitación',
@@ -162,7 +194,8 @@ async function sendMessage(text) {
   const msg = (text || inputText.value).trim()
   if (!msg || loading.value || generating.value) return
 
-  messages.value.push({ role: 'user', content: msg })
+  const hasImage = !!uploadedImage.value
+  messages.value.push({ role: 'user', content: msg, hasImage })
   inputText.value = ''
   loading.value = true
   scrollBottom()
@@ -172,7 +205,7 @@ async function sendMessage(text) {
     const curTags = getCurrentTagString()
     const res = await api.ponyChat(
       messages.value.map(m => ({ role: m.role, content: m.content })),
-      { configContext, currentTags: curTags }
+      { configContext, currentTags: curTags, images: hasImage ? [uploadedImage.value] : [] }
     )
 
     const summary = applyAiResponse(res.text)
@@ -183,6 +216,14 @@ async function sendMessage(text) {
     if (summary.rawTagsAdded.length) changes.push(`${summary.rawTagsAdded.length} raw tag(s) añadida(s)`)
     if (summary.negativePromptChanged) changes.push('negative prompt actualizado')
     if (changes.length) displayText += `\n\n✅ Tags aplicadas al configurador: ${changes.join(', ')}.`
+
+    // If image was used, note that tags come from image analysis
+    if (hasImage) {
+      const tagChanges = summary.changed.length + summary.rawTagsAdded.length + (summary.negativePromptChanged ? 1 : 0)
+      if (tagChanges > 0) {
+        displayText += `\n📸 Tags basados en la imagen de referencia.`
+      }
+    }
 
     messages.value.push({ role: 'assistant', content: displayText })
   } catch (e) {
@@ -220,13 +261,18 @@ async function generate() {
       height: 1024,
     }
 
-    const res = await api.ponyGenerate(currentTagString.value, neg, params)
+    if (uploadedImage.value) {
+      params.denoising = denoisingStrength.value
+    }
 
+    const res = await api.ponyGenerate(currentTagString.value, neg, params, uploadedImage.value)
+
+    const isImg2Img = !!uploadedImage.value
     messages.value.push({
       role: 'assistant',
       content: '',
       imageUrl: res.dataUrl || res.imageUrl,
-      meta: `${res.model} · ${res.params.steps} steps · CFG ${res.params.cfg}`
+      meta: `${res.model} · ${res.params.steps} steps · CFG ${res.params.cfg}${isImg2Img ? ` · img2img (denoising ${denoisingStrength.value.toFixed(2)})` : ''}`
     })
   } catch (e) {
     messages.value.push({ role: 'assistant', content: `Error generando: ${e.message}` })
@@ -238,6 +284,31 @@ async function generate() {
 
 function previewImage(url) {
   window.openLightbox?.(url)
+}
+
+function triggerFileInput() {
+  fileInput.value?.click()
+}
+
+function handleFileUpload(event) {
+  const file = event.target.files[0]
+  if (!file) return
+
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    uploadedImage.value = e.target.result
+  }
+  reader.readAsDataURL(file)
+}
+
+function removeImage() {
+  uploadedImage.value = null
+  if (fileInput.value) fileInput.value.value = ''
+}
+
+async function analyzeImage() {
+  if (loading.value || generating.value || !uploadedImage.value) return
+  await sendMessage('Analiza esta imagen y sugiere los tags Danbooru más apropiados para describirla. Describe TODO lo que veas: personajes, ropa, pose, fondo, iluminación, expresión, ángulo de cámara.')
 }
 </script>
 
@@ -447,6 +518,22 @@ function previewImage(url) {
   font-size: 12px;
 }
 
+/* Image reference badge on user messages */
+.pony-msg-ref-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: rgba(139, 92, 246, 0.8);
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(139, 92, 246, 0.15);
+}
+.pony-msg.user .pony-msg-ref-badge {
+  color: rgba(255, 255, 255, 0.6);
+  border-top-color: rgba(255, 255, 255, 0.15);
+}
+
 /* ── Image result in message ── */
 .pony-msg-image {
   display: flex;
@@ -499,13 +586,130 @@ function previewImage(url) {
 }
 
 /* ── Input ── */
+.pony-chat-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.chat-uploaded-image-preview {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 32px 0 32px;
+}
+
+.chat-image-actions {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-analyze {
+  background: rgba(124, 58, 237, 0.12);
+  color: #8b5cf6;
+  border: 1px solid rgba(124, 58, 237, 0.3);
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.btn-analyze:hover:not(:disabled) {
+  background: rgba(124, 58, 237, 0.2);
+  border-color: #8b5cf6;
+}
+.btn-analyze:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.chat-uploaded-image-inner {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chat-uploaded-image-inner img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
+.remove-image-btn {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: #ff5252;
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.chat-denoising {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 120px;
+  max-width: 200px;
+}
+.chat-denoising label {
+  font-size: 11px;
+  color: var(--muted);
+}
+.chat-denoising input[type=range] {
+  accent-color: #ff5282;
+  width: 100%;
+}
+
 .pony-chat-input {
   display: flex;
   gap: 10px;
-  padding: 16px 32px;
-  border-top: 1px solid var(--border);
-  background: var(--surface);
+  padding: 12px 32px 16px 32px;
   align-items: flex-end;
+}
+
+.btn-upload-icon {
+  background: var(--surface-2);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.btn-upload-icon:hover {
+  border-color: #ff5282;
+  color: #ff5282;
 }
 
 .pony-chat-textarea {

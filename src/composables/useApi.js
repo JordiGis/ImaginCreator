@@ -54,11 +54,11 @@ export function useApi() {
     return data.translated
   }
 
-  async function ponyGenerate(prompt, negativePrompt, params = {}) {
+  async function ponyGenerate(prompt, negativePrompt, params = {}, image = null) {
     const res = await fetch('/api/pony/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, negativePrompt, params })
+      body: JSON.stringify({ prompt, negativePrompt, params, image })
     })
     const text = await res.text()
     let data
@@ -78,7 +78,8 @@ export function useApi() {
       body: JSON.stringify({
         messages,
         configContext: options.configContext || '',
-        currentTags: options.currentTags || ''
+        currentTags: options.currentTags || '',
+        images: options.images || []
       })
     })
     const text = await res.text()
@@ -92,5 +93,33 @@ export function useApi() {
     return data
   }
 
-  return { generating, generateImage, fetchImages, fetchStats, checkCache, translatePrompt, ponyGenerate, ponyChat }
+  async function videoGenerate(image, positive_prompt, options = {}) {
+    const res = await fetch('/api/pony/video/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        image,
+        positive_prompt,
+        negative_prompt: options.negative_prompt || '',
+        seed: options.seed,
+        steps: options.steps,
+        cfg: options.cfg,
+        num_frames: options.num_frames
+      })
+    })
+    const text = await res.text()
+    let data
+    try { data = JSON.parse(text) } catch { throw new Error(text || `Error ${res.status}`) }
+    if (!res.ok) throw new Error(data.error || `Error ${res.status}`)
+    return data
+  }
+
+  async function checkVideoStatus(promptId) {
+    const res = await fetch(`/api/pony/video/status/${promptId}`)
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || `Error ${res.status}`)
+    return data
+  }
+
+  return { generating, generateImage, fetchImages, fetchStats, checkCache, translatePrompt, ponyGenerate, ponyChat, videoGenerate, checkVideoStatus }
 }

@@ -1,0 +1,16 @@
+{
+  "description": "Wan 2.2 TI2V-5B (FP16) — Image-to-Video with proper image conditioning. Native ComfyUI nodes. WanImageToVideo handles image + text conditioning fusion.",
+  "prompt": {
+    "1": { "class_type": "LoadImage", "inputs": { "image": "cat_input.png" } },
+    "2": { "class_type": "UNETLoader", "inputs": { "unet_name": "wan2.2_ti2v_5B_fp16.safetensors", "weight_dtype": "default" } },
+    "3": { "class_type": "CLIPLoader", "inputs": { "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors", "type": "wan" } },
+    "4": { "class_type": "VAELoader", "inputs": { "vae_name": "wan2.2_vae.safetensors" } },
+    "5": { "class_type": "WanImageToVideo", "inputs": { "positive": ["6", 0], "negative": ["7", 0], "vae": ["4", 0], "width": 640, "height": 360, "length": 80, "batch_size": 1, "start_image": ["1", 0] } },
+    "6": { "class_type": "CLIPTextEncode", "inputs": { "clip": ["3", 0], "text": "score_9, score_8_up, cinematic video, highly detailed, a cute fluffy kitten playing with a wool ball on the floor, soft paws moving, warm lighting, hyperrealistic, sharp focus, continuous cinematic motion" } },
+    "7": { "class_type": "CLIPTextEncode", "inputs": { "clip": ["3", 0], "text": "ugly, deformed, blurry, low quality, text, watermark, bad anatomy, distorted, disfigured, extra limbs, bad hands, static, no motion" } },
+    "8": { "class_type": "ModelSamplingSD3", "inputs": { "model": ["2", 0], "shift": 8.0 } },
+    "9": { "class_type": "KSampler", "inputs": { "model": ["8", 0], "positive": ["5", 0], "negative": ["5", 1], "latent_image": ["5", 2], "seed": 67890, "steps": 20, "cfg": 5.0, "sampler_name": "uni_pc", "scheduler": "simple", "denoise": 1.0 } },
+    "10": { "class_type": "VAEDecode", "inputs": { "samples": ["9", 0], "vae": ["4", 0] } },
+    "11": { "class_type": "SaveImage", "inputs": { "images": ["10", 0], "filename_prefix": "WanVideo" } }
+  }
+}
