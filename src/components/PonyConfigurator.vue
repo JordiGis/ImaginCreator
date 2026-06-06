@@ -57,33 +57,6 @@
         ></textarea>
       </div>
 
-      <!-- Image Input -->
-      <div class="output-section">
-        <div class="output-label">Imagen base (opcional, para edición):</div>
-        <div class="image-upload-box" @click="triggerFileInput">
-          <input type="file" ref="fileInput" @change="handleFileUpload" accept="image/*" style="display: none;" />
-          <div v-if="!uploadedImage" class="upload-placeholder">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-            <span>Haz clic para subir una imagen</span>
-          </div>
-          <div v-else class="uploaded-image-container">
-            <img :src="uploadedImage" class="uploaded-preview" />
-            <button class="remove-image-btn" @click.stop="removeImage">✕</button>
-          </div>
-        </div>
-        
-        <div class="denoising-control" v-if="uploadedImage">
-          <div class="denoising-header">
-            <span>Fuerza de alteración (Denoising):</span>
-            <span>{{ denoisingStrength.toFixed(2) }}</span>
-          </div>
-          <input type="range" v-model.number="denoisingStrength" min="0" max="1" step="0.05" />
-          <div class="denoising-desc">
-            <small>0 = Igual a la original | 1 = Imagen completamente nueva</small>
-          </div>
-        </div>
-      </div>
-
       <div class="output-section">
         <div class="output-label">Tag final:</div>
         <pre class="tag-output final-tag">{{ finalTagString || '—' }}</pre>
@@ -150,10 +123,6 @@ const api = useApi()
 const copied = ref(false)
 const generating = ref(false)
 const result = ref(null)
-
-const fileInput = ref(null)
-const uploadedImage = ref(null)
-const denoisingStrength = ref(0.7)
 
 // ── State managed by usePonyStore (syncs to localStorage automatically)
 
@@ -237,11 +206,7 @@ async function generate() {
       height: 1024,
     }
 
-    if (uploadedImage.value) {
-      params.denoising = denoisingStrength.value
-    }
-
-    const res = await api.ponyGenerate(finalTagString.value, neg, params, uploadedImage.value)
+    const res = await api.ponyGenerate(finalTagString.value, neg, params)
     result.value = res
   } catch (e) {
     result.value = { error: e.message }
@@ -264,30 +229,9 @@ function downloadResult() {
   a.click()
 }
 
-function triggerFileInput() {
-  fileInput.value?.click()
-}
-
-function handleFileUpload(event) {
-  const file = event.target.files[0]
-  if (!file) return
-
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    uploadedImage.value = e.target.result
-  }
-  reader.readAsDataURL(file)
-}
-
-function removeImage() {
-  uploadedImage.value = null
-  if (fileInput.value) fileInput.value.value = ''
-}
-
 function clearAll() {
   storeClearAll()
   result.value = null
-  removeImage()
 }
 </script>
 
@@ -521,91 +465,6 @@ function clearAll() {
 .pony-config::-webkit-scrollbar, .pony-output::-webkit-scrollbar { width: 6px; }
 .pony-config::-webkit-scrollbar-track, .pony-output::-webkit-scrollbar-track { background: transparent; }
 .pony-config::-webkit-scrollbar-thumb, .pony-output::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-
-.image-upload-box {
-  border: 2px dashed var(--border);
-  border-radius: var(--radius);
-  background: var(--surface-2);
-  min-height: 80px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s;
-  overflow: hidden;
-  position: relative;
-}
-.image-upload-box:hover {
-  border-color: #ff5282;
-  background: rgba(255, 82, 130, 0.05);
-}
-.upload-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  color: var(--muted);
-  font-size: 13px;
-  padding: 20px;
-}
-.uploaded-image-container {
-  width: 100%;
-  height: 100%;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #000;
-}
-.uploaded-preview {
-  max-width: 100%;
-  max-height: 200px;
-  object-fit: contain;
-}
-.remove-image-btn {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  background: rgba(0,0,0,0.7);
-  color: #fff;
-  border: none;
-  border-radius: 50%;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-size: 12px;
-  transition: background 0.2s;
-}
-.remove-image-btn:hover {
-  background: #ff5252;
-}
-
-.denoising-control {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 12px 16px;
-  margin-top: 4px;
-}
-.denoising-header {
-  display: flex;
-  justify-content: space-between;
-  font-size: 13px;
-  color: var(--fg);
-  margin-bottom: 8px;
-}
-.denoising-control input[type=range] {
-  width: 100%;
-  accent-color: #ff5282;
-}
-.denoising-desc {
-  margin-top: 4px;
-  color: var(--muted);
-  font-size: 11px;
-}
 
 @media (max-width: 900px) {
   .pony-config { flex: 1 1 100%; max-width: 100%; border-right: none; border-bottom: 1px solid var(--border); max-height: 50vh; }
