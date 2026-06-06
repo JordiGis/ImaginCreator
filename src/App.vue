@@ -145,11 +145,11 @@ onMounted(() => {
   --border: #2a2a35;
   --fg: #e8e8ed;
   --muted: #8a8a96;
-  --accent: #4f8cff;
-  --accent-hover: #6ba0ff;
-  --accent-subtle: rgba(79,140,255,0.12);
-  --success: #00c853;
-  --success-bg: rgba(0,200,83,0.1);
+  --accent: #ff5282;
+  --accent-hover: #ff7aa0;
+  --accent-subtle: rgba(255, 82, 130, 0.12);
+  --success: #ff5282;
+  --success-bg: rgba(255,82,130,0.1);
   --radius: 8px;
   --radius-sm: 6px;
   --font: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;

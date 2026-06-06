@@ -161,7 +161,7 @@ onMounted(() => {
 .gallery-item:hover {
   transform: scale(1.02);
   border-color: var(--accent);
-  box-shadow: 0 0 25px rgba(79,140,255,0.1);
+  box-shadow: 0 0 25px rgba(255, 82, 130, 0.1);
 }
 
 .gallery-item img {

@@ -2,6 +2,7 @@
   <div class="pony-chat-layout">
     <!-- ── Chat Messages ── -->
     <div class="pony-chat-messages" ref="chatRef">
+      <!-- Empty state -->
       <div v-if="!messages.length" class="pony-chat-empty">
         <span class="empty-icon">
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"></path><path d="M9 21h6"></path><path d="M12 19v2"></path></svg>
@@ -15,27 +16,57 @@
         </div>
       </div>
 
+      <!-- Current tags summary (visible once there's activity) -->
+      <div v-if="messages.length" class="pony-tag-summary">
+        <div class="pony-tag-summary-header" @click="showTagSummary = !showTagSummary">
+          <div class="pony-tag-summary-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>
+            Tags configurades
+          </div>
+          <div class="pony-tag-summary-meta">
+            <span class="tag-count-badge">{{ activeCategoryCount }} cat.</span>
+            <span class="collapse-icon">{{ showTagSummary ? '▼' : '▶' }}</span>
+          </div>
+        </div>
+        <div v-if="showTagSummary" class="pony-tag-summary-body">
+          <pre class="pony-tag-preview">{{ currentTagString || '—' }}</pre>
+          <div v-if="ponyState.negativePrompt" class="pony-neg-row">
+            <span class="neg-label">NEG:</span>
+            <span class="neg-text">{{ ponyState.negativePrompt }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Typing indicator (shown before messages exist or between them) -->
+      <div v-if="loading && !messages.length" class="pony-msg assistant">
+        <div class="pony-msg-bubble">
+          <div class="pony-typing">
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Message list -->
       <div
         v-for="(msg, i) in messages"
         :key="i"
         :class="['pony-msg', msg.role]"
       >
         <div class="pony-msg-bubble">
-          <div class="pony-msg-text">{{ msg.content }}</div>
-          <div v-if="msg.role === 'assistant'" class="pony-msg-actions">
-            <button class="pony-msg-btn" @click="copyMsg(msg.content)" title="Copiar tags">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-              Copiar
-            </button>
-            <button class="pony-msg-btn" @click="applyTags(msg.content)" title="Enviar al configurador">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-              Aplicar al config
-            </button>
+          <!-- Image result -->
+          <div v-if="msg.imageUrl" class="pony-msg-image">
+            <img :src="msg.imageUrl" @click="previewImage(msg.imageUrl)" />
+            <div v-if="msg.meta" class="pony-msg-image-meta">{{ msg.meta }}</div>
           </div>
+          <!-- Text message -->
+          <div v-else class="pony-msg-text">{{ msg.content }}</div>
         </div>
       </div>
 
-      <div v-if="loading" class="pony-msg assistant">
+      <!-- Inline typing indicator (after first message) -->
+      <div v-if="loading && messages.length" class="pony-msg assistant">
         <div class="pony-msg-bubble">
           <div class="pony-typing">
             <span class="typing-dot"></span>
@@ -54,20 +85,34 @@
         placeholder="Describe tu escena en español… Ej: dos chicas en una ducha, una arrodillada…"
         rows="2"
         @keydown.enter.prevent="handleEnter"
-        :disabled="loading"
+        :disabled="loading || generating"
       ></textarea>
-      <button class="btn-send" @click="sendMessage" :disabled="loading || !inputText.trim()">
-        <span v-if="loading" class="spinner"></span>
-        <span v-else>Enviar</span>
-      </button>
+      <div class="pony-chat-buttons">
+        <button
+          class="btn-generate"
+          @click="generate"
+          :disabled="generating || !currentTagString"
+          title="Generar imagen con los tags actuales"
+        >
+          <span v-if="generating" class="spinner"></span>
+          <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+          <span class="btn-label">Generar</span>
+        </button>
+        <button class="btn-send" @click="sendMessage" :disabled="loading || generating || !inputText.trim()">
+          <span v-if="loading" class="spinner"></span>
+          <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+          <span class="btn-label">Enviar</span>
+        </button>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, nextTick } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import { useApi } from '../composables/useApi.js'
 import { usePonyStore } from '../composables/usePonyStore.js'
+import { composeTags, PONY_CATEGORIES } from '../config/ponyDiffusion.js'
 
 const api = useApi()
 const { ponyState, getConfigContext, getCurrentTagString, applyAiResponse } = usePonyStore()
@@ -75,6 +120,8 @@ const { ponyState, getConfigContext, getCurrentTagString, applyAiResponse } = us
 const inputText = ref('')
 const messages = ref([])
 const loading = ref(false)
+const generating = ref(false)
+const showTagSummary = ref(true)
 const chatRef = ref(null)
 
 const suggestions = [
@@ -84,15 +131,36 @@ const suggestions = [
   'futanari dominante con correa, sumisa a cuatro patas, ambiente mazmorra',
 ]
 
+// ── Reactive tag display ──
+
+const currentTagString = computed(() => getCurrentTagString())
+
+const activeCategoryCount = computed(() => {
+  let count = 0
+  for (const cat of PONY_CATEGORIES) {
+    const val = ponyState.selections[cat.key]
+    if (cat.multi) {
+      if (val?.length) count++
+    } else if (val && val.id !== 'none') {
+      count++
+    }
+  }
+  return count
+})
+
+// ── Helpers ──
+
 function scrollBottom() {
   nextTick(() => {
     if (chatRef.value) chatRef.value.scrollTop = chatRef.value.scrollHeight
   })
 }
 
+// ── Chat with DeepSeek ──
+
 async function sendMessage(text) {
   const msg = (text || inputText.value).trim()
-  if (!msg || loading.value) return
+  if (!msg || loading.value || generating.value) return
 
   messages.value.push({ role: 'user', content: msg })
   inputText.value = ''
@@ -100,32 +168,21 @@ async function sendMessage(text) {
   scrollBottom()
 
   try {
-    // Send current config context + current tag string so DeepSeek knows what's configured
     const configContext = getConfigContext()
-    const currentTags = getCurrentTagString()
+    const curTags = getCurrentTagString()
     const res = await api.ponyChat(
       messages.value.map(m => ({ role: m.role, content: m.content })),
-      { configContext, currentTags }
+      { configContext, currentTags: curTags }
     )
 
-    // Apply AI response to configurator (auto-selects tags, updates negative prompt, raw tags)
     const summary = applyAiResponse(res.text)
 
-    // Build display text — append auto-apply summary if anything changed
     let displayText = res.text
     const changes = []
-    if (summary.changed.length) {
-      changes.push(`${summary.changed.length} categoría(s) actualizada(s)`)
-    }
-    if (summary.rawTagsAdded.length) {
-      changes.push(`${summary.rawTagsAdded.length} raw tag(s) añadida(s)`)
-    }
-    if (summary.negativePromptChanged) {
-      changes.push('negative prompt actualizado')
-    }
-    if (changes.length) {
-      displayText += `\n\n✅ Tags aplicadas al configurador: ${changes.join(', ')}.`
-    }
+    if (summary.changed.length) changes.push(`${summary.changed.length} categoría(s) actualizada(s)`)
+    if (summary.rawTagsAdded.length) changes.push(`${summary.rawTagsAdded.length} raw tag(s) añadida(s)`)
+    if (summary.negativePromptChanged) changes.push('negative prompt actualizado')
+    if (changes.length) displayText += `\n\n✅ Tags aplicadas al configurador: ${changes.join(', ')}.`
 
     messages.value.push({ role: 'assistant', content: displayText })
   } catch (e) {
@@ -137,22 +194,50 @@ async function sendMessage(text) {
 }
 
 function handleEnter(e) {
-  if (e.shiftKey) return // allow newline with shift+enter
+  if (e.shiftKey) return
   sendMessage()
 }
 
-function copyMsg(text) {
-  navigator.clipboard.writeText(text).catch(() => {})
+// ── Generate image from current tags ──
+
+async function generate() {
+  if (generating.value || !currentTagString.value) return
+  generating.value = true
+
+  try {
+    const neg = ponyState.negativePrompt.trim() || 'bad anatomy, ugly, distorted, low quality, worst quality'
+    const sel = ponyState.selections
+
+    const isPhotorealistic = sel.emphasis?.id === 'photorealistic'
+    const isAnime = sel.emphasis?.id === 'anime'
+    const hasAction = sel.action?.id !== 'none'
+
+    const params = {
+      cfg: isPhotorealistic ? 5 : isAnime ? 9 : (hasAction ? 7.5 : 7),
+      steps: isPhotorealistic ? 25 : isAnime ? 38 : (hasAction ? 34 : 30),
+      sampler: isPhotorealistic ? 'Euler a' : isAnime ? 'DPM++ 2M SDE Karras' : 'DPM++ 2M Karras',
+      width: 1024,
+      height: 1024,
+    }
+
+    const res = await api.ponyGenerate(currentTagString.value, neg, params)
+
+    messages.value.push({
+      role: 'assistant',
+      content: '',
+      imageUrl: res.dataUrl || res.imageUrl,
+      meta: `${res.model} · ${res.params.steps} steps · CFG ${res.params.cfg}`
+    })
+  } catch (e) {
+    messages.value.push({ role: 'assistant', content: `Error generando: ${e.message}` })
+  } finally {
+    generating.value = false
+    scrollBottom()
+  }
 }
 
-function applyTags(text) {
-  const summary = applyAiResponse(text)
-  const changes = []
-  if (summary.changed.length) changes.push(`${summary.changed.length} categoría(s)`)
-  if (summary.rawTagsAdded.length) changes.push(`${summary.rawTagsAdded.length} raw tag(s)`)
-  if (summary.negativePromptChanged) changes.push('negative prompt')
-  // We could show a toast here, but for now just log
-  console.log('✅ Tags re-aplicadas:', changes.join(', ') || 'sin cambios')
+function previewImage(url) {
+  window.openLightbox?.(url)
 }
 </script>
 
@@ -175,6 +260,7 @@ function applyTags(text) {
   gap: 16px;
 }
 
+/* ── Empty state ── */
 .pony-chat-empty {
   flex: 1;
   display: flex;
@@ -228,7 +314,96 @@ function applyTags(text) {
   background: rgba(255, 82, 130, 0.08);
 }
 
-/* Messages */
+/* ── Tag summary panel ── */
+.pony-tag-summary {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.pony-tag-summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--muted);
+  transition: background 0.1s;
+  user-select: none;
+}
+
+.pony-tag-summary-header:hover {
+  background: var(--surface-2);
+}
+
+.pony-tag-summary-title {
+  display: flex;
+  align-items: center;
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.pony-tag-summary-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tag-count-badge {
+  font-size: 10px;
+  background: rgba(255, 82, 130, 0.12);
+  color: #ff5282;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-weight: 500;
+}
+
+.collapse-icon {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.pony-tag-summary-body {
+  border-top: 1px solid var(--border);
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pony-tag-preview {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--fg);
+  font-family: var(--font-mono, monospace);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.pony-neg-row {
+  display: flex;
+  gap: 6px;
+  font-size: 11px;
+  align-items: flex-start;
+}
+
+.neg-label {
+  color: #ff6b6b;
+  font-weight: 600;
+  flex-shrink: 0;
+  font-family: var(--font-mono, monospace);
+}
+
+.neg-text {
+  color: var(--muted);
+  font-family: var(--font-mono, monospace);
+}
+
+/* ── Messages ── */
 .pony-msg {
   display: flex;
   flex-direction: column;
@@ -272,30 +447,35 @@ function applyTags(text) {
   font-size: 12px;
 }
 
-.pony-msg-actions {
+/* ── Image result in message ── */
+.pony-msg-image {
   display: flex;
-  gap: 6px;
-  margin-top: 8px;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
 }
 
-.pony-msg-btn {
-  background: var(--surface);
+.pony-msg-image img {
+  max-width: 100%;
+  max-height: 400px;
+  object-fit: contain;
+  border-radius: 8px;
   border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 3px 8px;
-  font-size: 11px;
-  color: var(--muted);
   cursor: pointer;
-  transition: all 0.15s;
-  font-family: inherit;
+  transition: border-color 0.2s;
 }
 
-.pony-msg-btn:hover {
+.pony-msg-image img:hover {
   border-color: #ff5282;
-  color: #ff5282;
 }
 
-/* Typing indicator */
+.pony-msg-image-meta {
+  font-size: 10px;
+  color: var(--muted);
+  font-family: var(--font-mono, monospace);
+}
+
+/* ── Typing indicator ── */
 .pony-typing {
   display: flex;
   gap: 4px;
@@ -318,13 +498,14 @@ function applyTags(text) {
   40% { transform: scale(1); opacity: 1; }
 }
 
-/* Input */
+/* ── Input ── */
 .pony-chat-input {
   display: flex;
   gap: 10px;
   padding: 16px 32px;
   border-top: 1px solid var(--border);
   background: var(--surface);
+  align-items: flex-end;
 }
 
 .pony-chat-textarea {
@@ -354,21 +535,28 @@ function applyTags(text) {
   opacity: 0.5;
 }
 
+.pony-chat-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .btn-send {
   background: #7c3aed;
   color: #fff;
   border: none;
-  padding: 10px 24px;
+  padding: 10px 16px;
   border-radius: var(--radius);
   font-weight: 500;
   cursor: pointer;
   transition: background 0.15s;
   font-size: 14px;
   font-family: inherit;
-  align-self: flex-end;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .btn-send:hover:not(:disabled) {
@@ -378,6 +566,42 @@ function applyTags(text) {
 .btn-send:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+.btn-generate {
+  background: #22c55e;
+  color: #fff;
+  border: none;
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 14px;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.btn-generate:hover:not(:disabled) {
+  background: #16a34a;
+}
+
+.btn-generate:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.btn-label {
+  display: inline;
+}
+
+@media (max-width: 600px) {
+  .btn-label {
+    display: none;
+  }
 }
 
 .spinner {

@@ -279,7 +279,7 @@ watch(() => props.pendingAttachments?.length ?? 0, (newLen, oldLen) => {
   font-size: 12px;
   cursor: pointer;
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%2300c853' d='M5 7L1 3h8z'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%23ff5282' d='M5 7L1 3h8z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 6px center;
   padding-right: 22px;
@@ -410,8 +410,8 @@ watch(() => props.pendingAttachments?.length ?? 0, (newLen, oldLen) => {
   gap: 6px;
   margin-bottom: 8px;
   padding: 6px 10px;
-  background: rgba(0, 230, 118, 0.06);
-  border: 1px solid rgba(0, 230, 118, 0.2);
+  background: rgba(255, 82, 130, 0.06);
+  border: 1px solid rgba(255, 82, 130, 0.2);
   border-radius: var(--radius-sm);
   font-size: 11px;
   line-height: 1.4;

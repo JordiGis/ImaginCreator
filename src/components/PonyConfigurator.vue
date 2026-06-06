@@ -15,6 +15,7 @@
         <div class="category-header" @click="toggleCollapse(cat.key)">
           <span>{{ cat.label }}</span>
           <span v-if="cat.multi && getCount(cat) > 0" class="count">✓ {{ getCount(cat) }}</span>
+          <span v-else-if="!cat.multi && getSingleSelectionLabel(cat)" class="count">✓ {{ getSingleSelectionLabel(cat) }}</span>
         </div>
         <div class="category-body">
           <button
@@ -132,6 +133,11 @@ function toggleCollapse(key) {
 function getCount(cat) {
   if (!cat.multi) return 0
   return ponyState.selections[cat.key].length
+}
+
+function getSingleSelectionLabel(cat) {
+  if (cat.multi) return ''
+  return ponyState.selections[cat.key]?.label || ''
 }
 
 function isSelected(cat, opt) {
