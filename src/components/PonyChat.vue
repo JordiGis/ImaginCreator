@@ -162,6 +162,16 @@
           <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
           <span class="btn-label">Generar</span>
         </button>
+        <button
+          class="btn-scene"
+          @click="generateScene"
+          :disabled="generating || loading || !messages.length"
+          title="Generar imagen representativa de la escena actual"
+        >
+          <span v-if="generating" class="spinner"></span>
+          <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+          <span class="btn-label">Escena</span>
+        </button>
         <button class="btn-send" @click="sendMessage" :disabled="loading || generating || !inputText.trim()">
           <span v-if="loading" class="spinner"></span>
           <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
@@ -569,6 +579,52 @@ async function generate() {
     })
   } catch (e) {
     messages.value.push({ role: 'assistant', content: `Error generando: ${e.message}` })
+  } finally {
+    generating.value = false
+    scrollBottom()
+    saveCurrentProject()
+  }
+}
+
+// ── Generate scene image from last 10 messages ──
+
+async function generateScene() {
+  if (generating.value || loading.value || !messages.value.length) return
+
+  const recent = messages.value.slice(-10)
+  generating.value = true
+
+  try {
+    // Step 1: DeepSeek analyzes chat → Danbooru prompt
+    const res = await api.ponySceneToPrompt(recent.map(m => ({
+      role: m.role,
+      content: m.content || (m.imageUrl ? '[Imagen generada]' : '')
+    })))
+    const prompt = res.prompt
+
+    // Step 2: Generate image with Pony model
+    const neg = ponyState.negativePrompt.trim() || 'bad anatomy, ugly, distorted, low quality, worst quality'
+    const params = {
+      cfg: 7,
+      steps: 30,
+      sampler: 'DPM++ 2M Karras',
+      width: 1024,
+      height: 1024,
+    }
+
+    const genRes = await api.ponyGenerate(prompt, neg, params)
+
+    messages.value.push({
+      role: 'assistant',
+      content: `🎬 Escena representativa:\n\n${prompt}`,
+      imageUrl: genRes.dataUrl || genRes.imageUrl,
+      meta: `${genRes.model} · ${genRes.params.steps} steps · CFG ${genRes.params.cfg}`
+    })
+  } catch (e) {
+    messages.value.push({
+      role: 'assistant',
+      content: `❌ Error generando escena: ${e.message}`
+    })
   } finally {
     generating.value = false
     scrollBottom()
@@ -1037,6 +1093,32 @@ function previewImage(url) {
 }
 
 .btn-generate:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.btn-scene {
+  background: #f59e0b;
+  color: #fff;
+  border: none;
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 14px;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.btn-scene:hover:not(:disabled) {
+  background: #d97706;
+}
+
+.btn-scene:disabled {
   opacity: 0.5;
   cursor: default;
 }

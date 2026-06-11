@@ -227,7 +227,99 @@ function updatePresetNames() {
   }
 }
 
-updatePresetNames()
+// ── Seed default presets on first launch ──
+
+function seedDefaultPresets() {
+  const raw = localStorage.getItem(CHAR_PRESETS_KEY)
+  if (raw && JSON.parse(raw) && Object.keys(JSON.parse(raw)).length > 0) return // already have presets
+
+  const presets = {}
+
+  presets['Valeria — Guerrero'] = {
+    selections: {
+      race: 'human', gender: 'female', age: 'adult',
+      facialHair: 'none',
+      faceShape: 'square', eyeShape: 'almond', eyeColor: 'green',
+      nose: 'straight', lips: 'medium',
+      expression: 'confident',
+      hairStyle: 'long', hairColor: 'red',
+      skinTone: 'light', skinFeature: 'scars',
+      adultFeatures: [],
+      bodyType: 'athletic', height: 'tall', bustSize: 'medium',
+      genitalType: 'none', genitalSize: 'none',
+      clothing: 'knight', pose: 'heroic',
+      cameraAngle: 'low_angle', lighting: 'dramatic',
+      specialTraits: ['battle_scars'],
+    },
+    customText: 'con una espada larga y un escudo con el emblema de su reino caído',
+    collapsed: {},
+  }
+
+  presets['Elara — Hechicera Elfa'] = {
+    selections: {
+      race: 'elf', gender: 'female', age: 'young',
+      facialHair: 'none',
+      faceShape: 'oval', eyeShape: 'almond', eyeColor: 'violet',
+      nose: 'button', lips: 'full',
+      expression: 'mysterious',
+      hairStyle: 'long', hairColor: 'silver',
+      skinTone: 'pale', skinFeature: 'glowing',
+      adultFeatures: [],
+      bodyType: 'slim', height: 'tall', bustSize: 'medium',
+      genitalType: 'none', genitalSize: 'none',
+      clothing: 'mage', pose: 'casting',
+      cameraAngle: 'three_quarter', lighting: 'magical',
+      specialTraits: ['pointed_ears', 'glowing_runes'],
+    },
+    customText: 'con un bastón arcano y partículas de magia estelar girando a su alrededor',
+    collapsed: {},
+  }
+
+  presets['Nova — Cazarrecompensas'] = {
+    selections: {
+      race: 'human', gender: 'female', age: 'adult',
+      facialHair: 'none',
+      faceShape: 'heart', eyeShape: 'upturned', eyeColor: 'blue',
+      nose: 'pointed', lips: 'full',
+      expression: 'confident',
+      hairStyle: 'pixie', hairColor: 'pink',
+      skinTone: 'medium', skinFeature: 'tattoos',
+      adultFeatures: ['makeup', 'lipstick'],
+      bodyType: 'athletic', height: 'average', bustSize: 'medium',
+      genitalType: 'none', genitalSize: 'none',
+      clothing: 'sci_fi', pose: 'arms_crossed',
+      cameraAngle: 'front', lighting: 'neon',
+      specialTraits: ['cyber_implants', 'piercings'],
+    },
+    customText: 'con una pistola láser en la cadera y un brillo neón en el rostro',
+    collapsed: {},
+  }
+
+  presets['Luna — Chica Trans'] = {
+    selections: {
+      race: 'human', gender: 'trans_woman', age: 'young',
+      facialHair: 'none',
+      faceShape: 'oval', eyeShape: 'round', eyeColor: 'brown',
+      nose: 'upturned', lips: 'medium',
+      expression: 'happy',
+      hairStyle: 'wavy', hairColor: 'brown',
+      skinTone: 'light', skinFeature: 'freckles',
+      adultFeatures: ['makeup', 'blush', 'lipstick', 'beauty_mark'],
+      bodyType: 'slim', height: 'average', bustSize: 'small',
+      genitalType: 'none', genitalSize: 'none',
+      clothing: 'casual', pose: 'portrait',
+      cameraAngle: 'front', lighting: 'soft',
+      specialTraits: [],
+    },
+    customText: 'con una chaqueta vaquera y una sonrisa tímida, luz natural de ventana',
+    collapsed: {},
+  }
+
+  localStorage.setItem(CHAR_PRESETS_KEY, JSON.stringify(presets))
+  updatePresetNames()
+}
+
+seedDefaultPresets()
 
 function savePreset() {
   presetNameInput.value = ''

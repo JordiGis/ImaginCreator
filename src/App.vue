@@ -117,29 +117,6 @@
       <router-view />
     </main>
 
-    <!-- ===== Bottom nav (mobile < 640px) ===== -->
-    <nav class="bottom-nav">
-      <router-link to="/chat" class="bottom-nav-item" :class="{ active: $route.path.startsWith('/chat') }">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 3h14a2 2 0 012 2v10a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2z"/></svg>
-        <span>Chats</span>
-      </router-link>
-      <router-link to="/characters" class="bottom-nav-item" :class="{ active: $route.path.startsWith('/characters') }">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M10 2l4 4h-3v4h-2V6H6l4-4z"/><path d="M2 18h16"/><path d="M5 14h10a1 1 0 011 1v3H4v-3a1 1 0 011-1z"/></svg>
-        <span>Roleplay</span>
-      </router-link>
-      <router-link to="/character" class="bottom-nav-item" :class="{ active: $route.path === '/character' }">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="10" cy="7" r="3"/><path d="M3 17c0-4 3.13-6 7-6s7 2 7 6"/></svg>
-        <span>Creador</span>
-      </router-link>
-      <router-link to="/pony" class="bottom-nav-item" :class="{ active: $route.path.startsWith('/pony') }">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3.5 8.5C3.5 5 6 2.5 10 2.5s6.5 2.5 6.5 6c0 4.5-6.5 9-6.5 9S3.5 13 3.5 8.5z"/><circle cx="10" cy="8" r="1.5"/></svg>
-        <span>Pony</span>
-      </router-link>
-      <router-link to="/gallery" class="bottom-nav-item" :class="{ active: $route.path === '/gallery' }">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="2" width="6" height="6"/><rect x="12" y="2" width="6" height="6"/><rect x="2" y="12" width="6" height="6"/><rect x="12" y="12" width="6" height="6"/></svg>
-        <span>Galería</span>
-      </router-link>
-    </nav>
   </div>
 </template>
 
@@ -209,7 +186,6 @@ onMounted(() => {
   --font: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', monospace;
   --sidebar-width: 280px;
-  --bottom-nav-h: 60px;
   --mobile-header-h: 48px;
 }
 
@@ -736,51 +712,6 @@ html, body {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-/* ── Bottom nav (mobile < 640px) ── */
-.bottom-nav {
-  display: none;
-  position: fixed;
-  bottom: 0; left: 0; right: 0;
-  height: var(--bottom-nav-h);
-  background: var(--surface);
-  border-top: 1px solid var(--border);
-  z-index: 50;
-  justify-content: space-around;
-  align-items: center;
-  padding: 4px 0 env(safe-area-inset-bottom, 4px) 0;
-}
-
-.bottom-nav-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 6px 8px;
-  border-radius: 6px;
-  color: var(--muted);
-  text-decoration: none;
-  font-size: 10px;
-  font-weight: 500;
-  transition: color 0.15s;
-  -webkit-tap-highlight-color: transparent;
-  min-width: 0;
-  flex: 1;
-  max-width: 72px;
-}
-.bottom-nav-item svg {
-  width: 22px;
-  height: 22px;
-}
-.bottom-nav-item span {
-  font-size: 10px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
-.bottom-nav-item.active { color: var(--accent); }
-.bottom-nav-item:active { background: var(--surface-2); }
-
 /* ── Tablet: sidebar mini (640px - 1024px) ── */
 @media (min-width: 640px) and (max-width: 1024px) {
   .sidebar {
@@ -806,18 +737,18 @@ html, body {
   .nav-tab { justify-content: center; padding: 10px; }
 }
 
-/* ── Mobile: sidebar drawer + bottom nav (< 640px) ── */
+/* ── Mobile: sidebar drawer (< 640px) ── */
 @media (max-width: 639px) {
   .mobile-header { display: flex; }
   .sidebar-backdrop { display: block; }
 
-  .app { padding-top: var(--mobile-header-h); padding-bottom: var(--bottom-nav-h); }
+  .app { padding-top: var(--mobile-header-h); }
 
   .sidebar {
     position: fixed;
     top: var(--mobile-header-h);
     left: 0;
-    bottom: var(--bottom-nav-h);
+    bottom: 0;
     width: min(300px, 80vw);
     min-width: 0;
     z-index: 45;
@@ -832,7 +763,6 @@ html, body {
     opacity: 1;
   }
 
-  .bottom-nav { display: flex; }
 
   /* View headers with less padding on mobile */
   .view-header {
@@ -862,8 +792,6 @@ html, body {
 /* ── Very thin screens (< 380px) ── */
 @media (max-width: 379px) {
   .message { max-width: 95%; }
-  .bottom-nav-item { max-width: 56px; }
-  .bottom-nav-item svg { width: 18px; height: 18px; }
 }
 
 /* ── Ensure pony sub-view layouts scroll properly ── */

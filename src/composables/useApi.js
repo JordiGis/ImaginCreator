@@ -71,6 +71,23 @@ export function useApi() {
     return data
   }
 
+  async function ponySceneToPrompt(messages) {
+    const res = await fetch('/api/pony/scene-to-prompt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages })
+    })
+    const text = await res.text()
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch {
+      throw new Error(text || `Error ${res.status}`)
+    }
+    if (!res.ok) throw new Error(data.error || `Error ${res.status}`)
+    return data
+  }
+
   async function ponyChat(messages, options = {}) {
     const res = await fetch('/api/pony/chat', {
       method: 'POST',
@@ -92,5 +109,5 @@ export function useApi() {
     return data
   }
 
-  return { generating, generateImage, fetchImages, fetchStats, checkCache, translatePrompt, ponyGenerate, ponyChat }
+  return { generating, generateImage, fetchImages, fetchStats, checkCache, translatePrompt, ponyGenerate, ponyChat, ponySceneToPrompt }
 }

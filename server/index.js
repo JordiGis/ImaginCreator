@@ -464,6 +464,51 @@ REGLAS ADICIONALES:
     }
   }
 
+  // POST /api/pony/scene-to-prompt — analyze last N chat messages → Danbooru prompt for image gen
+  if (method === 'POST' && url.pathname === '/api/pony/scene-to-prompt') {
+    try {
+      const { messages, characterName, characterAppearance } = await parseBody(req)
+      if (!messages?.length) return json(res, 400, { error: 'Messages required' })
+
+      const recent = messages.slice(-10)
+      let appearanceContext = ''
+      if (characterName && characterAppearance) {
+        appearanceContext = `\n\nAPARIENCIA DEL PERSONAJE PRINCIPAL (${characterName}):\n${characterAppearance}\n\nAsegúrate de que los tags reflejen FIELMENTE esta apariencia (color de pelo, ojos, complexión, ropa, etc.). Los datos de apariencia tienen PRIORIDAD sobre lo que deduzcas del contexto.`
+      }
+
+      const systemContent = `Eres un experto en crear prompts para Pony Diffusion V6 XL, un modelo de imágenes NSFW basado en Danbooru.
+
+Analiza los últimos mensajes de este chat y genera un prompt en formato Danbooru tags que represente la ESCENA ACTUAL de forma fiel.
+
+REGLAS:
+- Responde SOLO con los tags separados por comas. Sin explicaciones, markdown ni narrativa.
+- Elige rating adecuado: rating:safe | rating:questionable | rating:explicit
+- Empieza con: score_9, score_8_up, score_7_up
+- Termina con: (masterpiece:1.2), (best_quality:1.2)
+- Describe: personajes (1girl/1boy/etc), acciones, entorno, ropa/desnudez, emociones, iluminación
+- Máximo 80 tags
+- Si el chat tiene imágenes adjuntas, describe lo que ves en ellas
+- La apariencia del personaje principal es SAGRADA — usa los datos de apariencia proporcionados.${appearanceContext}`
+
+      const result = await callWithFallback(
+        TEXT_MODEL_FALLBACKS,
+        [
+          { role: 'system', content: systemContent },
+          ...recent.map(m => ({
+            role: m.role === 'assistant' ? 'assistant' : 'user',
+            content: m.content || (m.imageUrl ? '[Imagen generada]' : '')
+          }))
+        ],
+        KEY
+      )
+
+      return json(res, 200, { prompt: result.text.trim(), usage: result.usage })
+    } catch (e) {
+      console.error('❌ Scene-to-prompt error:', e)
+      return json(res, 500, { error: String(e) })
+    }
+  }
+
   // ── Character (roleplay chatbot) routes ──
 
   // GET /api/characters — list all characters
