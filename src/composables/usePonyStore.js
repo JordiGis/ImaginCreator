@@ -3,9 +3,10 @@
 // Persists to localStorage under 'imagin-creator-pony-config'
 
 import { reactive, watch } from 'vue'
-import { PONY_CATEGORIES, getDefaultSelections, parseTagStringToActions, composeTags } from '../config/ponyDiffusion.js'
+import { PONY_CATEGORIES, getDefaultSelections, parseTagStringToActions, composeTags, matchTextToOptions } from '../config/ponyDiffusion.js'
 
 const STORAGE_KEY = 'imagin-creator-pony-config'
+const PROJECTS_KEY = 'imagin-creator-pony-projects'
 
 // ── Build initial state ──
 const defaults = getDefaultSelections()
@@ -16,6 +17,129 @@ const ponyState = reactive({
   negativePrompt: '',
   collapsed: Object.fromEntries(PONY_CATEGORIES.map(c => [c.key, true])),
 })
+
+// ── Project management ──
+// Each project: { id, name, messages, selections, extraTags, negativePrompt, createdAt }
+// selections stored as { catKey: optionId | optionId[] } — portable across sessions
+
+const projects = reactive([])
+
+function loadProjects() {
+  try {
+    const raw = localStorage.getItem(PROJECTS_KEY)
+    if (!raw) return
+    const parsed = JSON.parse(raw)
+    projects.splice(0, projects.length, ...parsed)
+  } catch (e) {
+    console.warn('Failed to load pony projects:', e)
+  }
+}
+
+function saveProjects() {
+  try {
+    localStorage.setItem(PROJECTS_KEY, JSON.stringify([...projects]))
+  } catch {}
+}
+
+/** Snapshot current tag selections as { catKey: id | id[] } */
+function snapshotSelections() {
+  const s = {}
+  for (const cat of PONY_CATEGORIES) {
+    if (cat.multi) {
+      s[cat.key] = ponyState.selections[cat.key].map(o => o.id)
+    } else {
+      s[cat.key] = ponyState.selections[cat.key]?.id || null
+    }
+  }
+  return s
+}
+
+/** Restore tag selections from a snapshot */
+function restoreSelections(snapshot) {
+  if (!snapshot) return
+  // Reset everything first
+  for (const cat of PONY_CATEGORIES) {
+    if (cat.multi) {
+      ponyState.selections[cat.key].splice(0, ponyState.selections[cat.key].length)
+    } else {
+      ponyState.selections[cat.key] = null
+    }
+  }
+  // Restore from snapshot
+  for (const cat of PONY_CATEGORIES) {
+    const val = snapshot[cat.key]
+    if (val == null) continue
+    if (cat.multi && Array.isArray(val)) {
+      for (const id of val) {
+        const opt = cat.options.find(o => o.id === id)
+        if (opt) ponyState.selections[cat.key].push(opt)
+      }
+    } else if (typeof val === 'string') {
+      const opt = cat.options.find(o => o.id === val)
+      if (opt) ponyState.selections[cat.key] = opt
+    }
+  }
+}
+
+/** Create new empty project, returns its id */
+function createProject(name) {
+  const id = Date.now().toString()
+  const project = {
+    id,
+    name: name || `Proyecto ${projects.length + 1}`,
+    messages: [],
+    selections: null,
+    extraTags: '',
+    negativePrompt: '',
+    createdAt: new Date().toISOString(),
+  }
+  projects.push(project)
+  saveProjects()
+  return id
+}
+
+/** Save current tag state + messages into a project */
+function saveProjectState(projectId, messages) {
+  const p = projects.find(p => p.id === projectId)
+  if (!p) return
+  p.messages = messages.map(m => ({
+    role: m.role,
+    content: m.content,
+    imageUrl: m.imageUrl,
+    meta: m.meta,
+    images: m.images,
+  }))
+  p.selections = snapshotSelections()
+  p.extraTags = ponyState.extraTags
+  p.negativePrompt = ponyState.negativePrompt
+  saveProjects()
+}
+
+/** Load a project: restore tag state, return messages. Returns null if not found */
+function loadProjectState(projectId) {
+  const p = projects.find(p => p.id === projectId)
+  if (!p) return null
+  restoreSelections(p.selections)
+  if (p.extraTags) ponyState.extraTags = p.extraTags
+  if (p.negativePrompt) ponyState.negativePrompt = p.negativePrompt
+  return p.messages || []
+}
+
+/** Delete a project by id */
+function deleteProject(projectId) {
+  const idx = projects.findIndex(p => p.id === projectId)
+  if (idx >= 0) projects.splice(idx, 1)
+  saveProjects()
+}
+
+/** Rename a project */
+function renameProject(projectId, name) {
+  const p = projects.find(p => p.id === projectId)
+  if (p) { p.name = name; saveProjects() }
+}
+
+// Load saved projects on init
+loadProjects()
 
 // ── Persistence ──
 function loadSavedConfig() {
@@ -182,12 +306,43 @@ function applyAiResponse(text) {
   return { changed, rawTagsAdded, negativePromptChanged }
 }
 
-/** Reset all selections to defaults */
+/**
+ * Parse natural-language text, match keywords to pony tags, apply to config.
+ * Returns summary of what changed.
+ */
+function applyTextToConfig(text) {
+  if (!text || !text.trim()) return { changes: [], matchCount: 0 }
+  const matches = matchTextToOptions(text)
+  const changes = []
+
+  for (const [catKey, optionId] of Object.entries(matches)) {
+    const cat = PONY_CATEGORIES.find(c => c.key === catKey)
+    if (!cat) continue
+    const option = cat.options.find(o => o.id === optionId)
+    if (!option) continue
+
+    if (cat.multi) {
+      const arr = ponyState.selections[catKey]
+      if (!arr.some(s => s.id === optionId)) {
+        arr.push(option)
+        changes.push({ key: catKey, label: cat.label, option: option.label })
+      }
+    } else {
+      if (ponyState.selections[catKey]?.id !== optionId) {
+        ponyState.selections[catKey] = option
+        changes.push({ key: catKey, label: cat.label, option: option.label })
+      }
+    }
+  }
+
+  return { changes, matchCount: Object.keys(matches).length }
+}
+
+/** Reset all selections to empty/null — new project */
 function clearAll() {
-  const defaults = getDefaultSelections()
   for (const cat of PONY_CATEGORIES) {
     if (cat.multi) ponyState.selections[cat.key].splice(0, ponyState.selections[cat.key].length)
-    else ponyState.selections[cat.key] = defaults[cat.key]
+    else ponyState.selections[cat.key] = null
   }
   ponyState.extraTags = ''
   ponyState.negativePrompt = ''
@@ -199,7 +354,14 @@ export function usePonyStore() {
     getConfigContext,
     getCurrentTagString,
     applyAiResponse,
+    applyTextToConfig,
     clearAll,
+    projects,
+    createProject,
+    saveProjectState,
+    loadProjectState,
+    deleteProject,
+    renameProject,
     PONY_CATEGORIES,
   }
 }

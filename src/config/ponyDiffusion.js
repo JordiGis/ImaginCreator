@@ -480,3 +480,201 @@ export function parseTagStringToActions(tagString, currentSelections) {
 
   return { selections: resultSelections, extraTags }
 }
+
+// ── Spanish keyword → tag matching (local, no AI needed) ──
+
+/**
+ * Matchers: [categoryKey, optionId, keywords[]]
+ * Multi-word phrases checked first, then single words via word-boundary regex.
+ */
+const SPANISH_KEYWORD_MATCHERS = [
+  // ── Rating ──
+  ['rating', 'explicit', ['explícito', 'nsfw', 'pornografía', 'porno']],
+  ['rating', 'questionable', ['cuestionable']],
+  ['rating', 'safe', ['seguro', 'sfw']],
+
+  // ── Subject ──
+  ['subject', '1girl', ['chica', 'mujer', 'ella', 'niña', 'girl', 'female']],
+  ['subject', '1boy', ['chico', 'hombre', 'él', 'niño', 'boy', 'male']],
+  ['subject', '1girl_1boy', ['pareja hetero', 'chico y chica', 'hombre y mujer']],
+  ['subject', '2girls', ['dos chicas', '2 chicas', 'dos mujeres', 'pareja lésbica', 'chicas lesbianas']],
+  ['subject', '2boys', ['dos chicos', '2 chicos', 'dos hombres', 'pareja gay', 'chicos gay']],
+  ['subject', 'group', ['grupo', 'orgía', 'trío', 'trío', 'gangbang']],
+  ['subject', 'solo_male', ['solo masculino', 'hombre solo']],
+  ['subject', 'solo_female', ['solo femenino', 'mujer sola']],
+
+  // ── Hair Color ──
+  ['hairColor', 'red_hair', ['pelirroja', 'pelirrojo', 'pelo rojo', 'cabello rojo']],
+  ['hairColor', 'blonde_hair', ['rubia', 'rubio', 'pelo rubio', 'cabello rubio', 'rubias']],
+  ['hairColor', 'brown_hair', ['morena', 'moreno', 'castaña', 'castaño', 'pelo castaño', 'cabello castaño']],
+  ['hairColor', 'black_hair', ['pelo negro', 'cabello negro', 'morena de pelo negro']],
+  ['hairColor', 'white_hair', ['pelo blanco', 'cabello blanco', 'canas', 'pelo gris']],
+  ['hairColor', 'blue_hair', ['pelo azul', 'cabello azul']],
+  ['hairColor', 'pink_hair', ['pelo rosa', 'cabello rosa', 'pelo rosado']],
+  ['hairColor', 'purple_hair', ['pelo morado', 'pelo púrpura']],
+
+  // ── Hair Style ──
+  ['hair', 'long_hair', ['pelo largo', 'cabello largo', 'melena', 'pelo muy largo']],
+  ['hair', 'very_long_hair', ['pelo muy largo', 'cabello muy largo']],
+  ['hair', 'short_hair', ['pelo corto', 'cabello corto']],
+  ['hair', 'medium_hair', ['media melena', 'pelo mediano']],
+  ['hair', 'twin_tails', ['coletas', 'coleta doble', 'twin tails']],
+  ['hair', 'ponytail', ['cola de caballo', 'coleta alta']],
+
+  // ── Eye Color ──
+  ['eyeColor', 'blue_eyes', ['ojos azules', 'ojos celestes']],
+  ['eyeColor', 'green_eyes', ['ojos verdes']],
+  ['eyeColor', 'red_eyes', ['ojos rojos', 'ojos colorados']],
+  ['eyeColor', 'brown_eyes', ['ojos marrones', 'ojos castaños']],
+  ['eyeColor', 'heterochromia', ['heterocromía', 'ojos de diferente color', 'un ojo de cada color']],
+
+  // ── Expression ──
+  ['expression', 'blush', ['sonrojada', 'sonrojado', 'ruborizada', 'sonrojo', 'blush']],
+  ['expression', 'smile', ['sonrisa', 'sonriendo', 'sonriente', 'sonríe']],
+  ['expression', 'ahegao', ['ahegao']],
+  ['expression', 'tongue_out', ['lengua fuera', 'saca la lengua', 'enseña la lengua']],
+  ['expression', 'drooling', ['babeando', 'babosa']],
+  ['expression', 'tears', ['lágrimas', 'llorando', 'llora']],
+  ['expression', 'surprised', ['sorprendida', 'sorprendido', 'asustada', 'asustado', 'alarma']],
+  ['expression', 'angry', ['enfadada', 'enfadado', 'enojada', 'enojado', 'furiosa', 'furioso']],
+  ['expression', 'seductive_smile', ['sonrisa seductora', 'mirada seductora', 'provocativa']],
+  ['expression', 'open_mouth', ['boca abierta', 'boquiabierta']],
+
+  // ── Clothing ──
+  ['clothing', 'nude', ['desnuda', 'desnudo', 'desnudos', 'desnudas', 'en pelota', 'desnudez', 'desnuda']],
+  ['clothing', 'lingerie', ['lencería', 'ropa interior femenina']],
+  ['clothing', 'bra_panties', ['sujetador', 'bragas', 'sujetador y bragas', 'conjunto']],
+  ['clothing', 'corset', ['corsé', 'corset']],
+  ['clothing', 'stockings', ['medias', 'liguero', 'medias de red', 'medias altas']],
+  ['clothing', 'thong', ['tanga', 'hilo dental']],
+  ['clothing', 'naked_apron', ['delantal', 'solo delantal', 'desnuda con delantal']],
+  ['clothing', 'bikini', ['bikini', 'bañador']],
+  ['clothing', 'robe', ['bata', 'albornoz']],
+  ['clothing', 'suit', ['traje', 'traje formal']],
+  ['clothing', 'uniform', ['uniforme', 'uniforme colegiala']],
+  ['clothing', 'see_through', ['ropa transparente', 'transparente', 'see-through']],
+
+  // ── Pose ──
+  ['pose', 'standing', ['de pie', 'bípeda', 'bípedo', 'parada', 'parado']],
+  ['pose', 'lying', ['tumbada', 'tumbado', 'acostada', 'acostado', 'echada', 'echado']],
+  ['pose', 'sitting', ['sentada', 'sentado', 'sentadas']],
+  ['pose', 'kneeling', ['arrodillada', 'arrodillado', 'de rodillas']],
+  ['pose', 'on_all_fours', ['a cuatro patas', 'en cuatro patas']],
+  ['pose', 'bent_over', ['inclinada', 'inclinado', 'doblada', 'doblado', 'agachada']],
+  ['pose', 'bound', ['atada', 'atado', 'atados', 'atadas', 'vendada', 'inmovilizada', 'atada a la cama']],
+  ['pose', 'doggy_style', ['doggy', 'a perrito', 'desde atrás', 'perrito']],
+  ['pose', 'missionary', ['misionero']],
+  ['pose', 'against_wall', ['contra la pared', 'apoyada en la pared']],
+  ['pose', 'spread_legs', ['piernas abiertas', 'abierta de piernas', 'patas abiertas']],
+  ['pose', 'cowgirl', ['vaquera', 'cowgirl', 'encima']],
+  ['pose', 'sixty_nine', ['69', 'sesenta y nueve']],
+  ['pose', 'facing_viewer', ['mirando al frente', 'mirando al espectador', 'de frente']],
+  ['pose', 'from_behind', ['desde atrás', 'por detrás', 'visto por detrás']],
+  ['pose', 'bound', ['atada', 'atado', 'atados', 'vendada', 'esposada', 'inmovilizada']],
+
+  // ── Action ──
+  ['action', 'masturbation', ['masturbándose', 'masturbacion', 'masturbando', 'se masturba', 'masturbation']],
+  ['action', 'vaginal_sex', ['vaginal', 'sexo vaginal', 'penetración vaginal']],
+  ['action', 'anal_sex', ['anal', 'sexo anal', 'penetración anal', 'por detrás', 'anal sex']],
+  ['action', 'fellatio', ['mamada', 'fellatio', 'oral', 'sexo oral', 'chupando', 'haciendo una mamada']],
+  ['action', 'cunnilingus', ['cunnilingus', 'comer el coño', 'comer el conejo']],
+  ['action', 'handjob', ['paja', 'masturbación manual', 'handjob']],
+  ['action', 'facial', ['corrida facial', 'facial', 'semen en la cara', 'cum shot']],
+  ['action', 'cum_inside', ['creampie', 'leche dentro', 'corrida interna', 'adentro']],
+  ['action', 'cum_in_mouth', ['leche en boca', 'semen en boca', 'corrida en boca']],
+  ['action', 'cum_on_body', ['corrida en el cuerpo', 'semen en cuerpo', 'leche en cuerpo']],
+  ['action', 'double_penetration', ['doble penetración', 'dp']],
+  ['action', 'group_sex', ['sexo en grupo', 'gangbang', 'orgía']],
+  ['action', 'footjob', ['footjob', 'pies', 'pies y polla']],
+  ['action', 'piledriver', ['piledriver']],
+
+  // ── Environment ──
+  ['environment', 'shower', ['ducha', 'duchándose', 'duchando', 'en la ducha']],
+  ['environment', 'bathroom', ['baño', 'bañera', 'en el baño']],
+  ['environment', 'bedroom', ['dormitorio', 'habitación', 'en la habitación', 'cuarto']],
+  ['environment', 'bed', ['cama', 'en la cama', 'sobre la cama']],
+  ['environment', 'outdoors', ['exterior', 'aire libre', 'naturaleza', 'campo', 'al aire libre', 'bosque']],
+  ['environment', 'beach', ['playa', 'en la playa']],
+  ['environment', 'pool', ['piscina', 'pileta', 'en la piscina']],
+  ['environment', 'sofa', ['sofá', 'sillón', 'en el sofá']],
+  ['environment', 'car', ['coche', 'auto', 'automóvil', 'en el coche']],
+  ['environment', 'classroom', ['aula', 'clase', 'escuela', 'salón de clases']],
+
+  // ── Breasts ──
+  ['breasts', 'small_breasts', ['pecho pequeño', 'senos pequeños', 'poco pecho', 'teta pequeña', 'plancha']],
+  ['breasts', 'medium_breasts', ['pecho mediano', 'senos medianos']],
+  ['breasts', 'large_breasts', ['pecho grande', 'senos grandes', 'tetas grandes', 'mucho pecho', 'buen pecho']],
+  ['breasts', 'huge_breasts', ['pecho enorme', 'tetas enormes', 'senos enormes', 'pechos enormes']],
+
+  // ── Genitalia ──
+  ['genitalia', 'penis', ['pene', 'polla', 'verga', 'rabo', 'tula']],
+  ['genitalia', 'vagina', ['vagina', 'coño', 'vulva', 'concha']],
+  ['genitalia', 'erection', ['erección', 'dura', 'empalmada', 'parada']],
+  ['genitalia', 'both', ['futa', 'futanari', 'hermafrodita', 'ambos genitales']],
+
+  // ── Emphasis ──
+  ['emphasis', 'photorealistic', ['fotorrealista', 'realista', 'foto realista', 'hyperrealista']],
+  ['emphasis', 'anime', ['anime', 'manga', 'estilo anime']],
+  ['emphasis', 'detailed', ['detallado', 'muy detallado', 'alta definición']],
+  ['emphasis', 'cinematic', ['cinematográfico', 'cinematográfica', 'épico', 'cinematic']],
+  ['emphasis', 'masterpiece', ['masterpiece', 'obra maestra', 'alta calidad']],
+
+  // ── Body Focus ──
+  ['bodyFocus', 'face_focus', ['primer plano', 'rostro', 'cara', 'retrato']],
+  ['bodyFocus', 'upper_body', ['torso', 'parte superior', 'medio cuerpo']],
+  ['bodyFocus', 'lower_body', ['parte inferior', 'caderas', 'piernas']],
+  ['bodyFocus', 'breasts_focus', ['enfoque en pecho', 'primer plano pecho', 'pechos']],
+  ['bodyFocus', 'buttocks_focus', ['enfoque en glúteos', 'culo', 'trasero', 'nalgas']],
+  ['bodyFocus', 'crotch_focus', ['enfoque en entrepierna', 'entrepierna']],
+
+  // ── Details (multi) ──
+  ['details', 'muscular', ['musculosa', 'musculoso', 'músculos', 'fuerte']],
+  ['details', 'thick_thighs', ['muslos gruesos', 'piernas gruesas']],
+  ['details', 'pubic_hair', ['vello púbico', 'pelo púbico', 'velludo']],
+  ['details', 'sweat', ['sudor', 'sudando', 'mojada', 'mojado']],
+  ['details', 'piercings_d', ['piercings', 'pendientes', 'aros']],
+  ['details', 'tattoo_d', ['tatuajes', 'tatuada', 'tatuado']],
+  ['details', 'mole', ['lunar', 'beauty mark']],
+  ['details', 'bdsm_d', ['bdsm', 'bondage', 'cuerdas', 'ataduras']],
+  ['details', 'nipples', ['pezones', 'pezón', 'tetillas']],
+  ['details', 'body_hair_d', ['vello corporal', 'peludo']],
+]
+
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/**
+ * Match Spanish natural-language text against pony tag options.
+ * Returns { [categoryKey]: optionId } — first match per category.
+ */
+export function matchTextToOptions(text) {
+  const lower = text.toLowerCase()
+  const matched = {}
+
+  // First pass: multi-word phrases (higher specificity)
+  for (const [catKey, optionId, keywords] of SPANISH_KEYWORD_MATCHERS) {
+    if (matched[catKey]) continue
+    for (const kw of keywords) {
+      if (kw.includes(' ') && lower.includes(kw)) {
+        matched[catKey] = optionId
+        break
+      }
+    }
+  }
+
+  // Second pass: single words (word-boundary regex)
+  const words = lower.split(/[\s,.;:!¿?¡()[\]]+/).filter(Boolean)
+  for (const [catKey, optionId, keywords] of SPANISH_KEYWORD_MATCHERS) {
+    if (matched[catKey]) continue
+    for (const kw of keywords) {
+      if (kw.includes(' ')) continue
+      if (words.includes(kw)) {
+        matched[catKey] = optionId
+        break
+      }
+    }
+  }
+
+  return matched
+}

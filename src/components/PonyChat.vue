@@ -1,5 +1,27 @@
 <template>
   <div class="pony-chat-layout">
+    <!-- ── Project tabs ── -->
+    <div class="pony-project-tabs">
+      <button
+        v-for="(p, i) in projects"
+        :key="p.id"
+        :class="['pony-project-tab', { active: i === currentProjectIdx }]"
+        @click="switchProject(i)"
+        :title="p.name"
+      >
+        <span class="pony-project-tab-name">{{ p.name || 'Sin nombre' }}</span>
+        <span
+          v-if="projects.length > 1"
+          class="pony-project-tab-close"
+          @click.stop="deleteProjectAt(i)"
+          title="Eliminar proyecto"
+        >&times;</span>
+      </button>
+      <button class="pony-project-tab-add" @click="newProject" title="Nuevo proyecto">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+      </button>
+    </div>
+
     <!-- ── Chat Messages ── -->
     <div class="pony-chat-messages" ref="chatRef">
       <!-- Empty state -->
@@ -24,6 +46,9 @@
             Tags configurades
           </div>
           <div class="pony-tag-summary-meta">
+            <button class="btn-clear-tags" @click.stop="clearAll" title="Limpiar tags actuales">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
             <span class="tag-count-badge">{{ activeCategoryCount }} cat.</span>
             <span class="collapse-icon">{{ showTagSummary ? '▼' : '▶' }}</span>
           </div>
@@ -55,13 +80,23 @@
         :class="['pony-msg', msg.role]"
       >
         <div class="pony-msg-bubble">
+          <!-- User image attachments -->
+          <div v-if="msg.images?.length" class="pony-msg-attachments">
+            <img
+              v-for="(img, j) in msg.images"
+              :key="j"
+              :src="img"
+              class="pony-msg-attach-img"
+              @click="previewImage(img)"
+            />
+          </div>
           <!-- Image result -->
           <div v-if="msg.imageUrl" class="pony-msg-image">
             <img :src="msg.imageUrl" @click="previewImage(msg.imageUrl)" />
             <div v-if="msg.meta" class="pony-msg-image-meta">{{ msg.meta }}</div>
           </div>
           <!-- Text message -->
-          <div v-else class="pony-msg-text">{{ msg.content }}</div>
+          <div v-if="msg.content" class="pony-msg-text">{{ msg.content }}</div>
         </div>
       </div>
 
@@ -79,15 +114,44 @@
 
     <!-- ── Input ── -->
     <div class="pony-chat-input">
-      <textarea
-        v-model="inputText"
-        class="pony-chat-textarea"
-        placeholder="Describe tu escena en español… Ej: dos chicas en una ducha, una arrodillada…"
-        rows="2"
-        @keydown.enter.prevent="handleEnter"
-        :disabled="loading || generating"
-      ></textarea>
+      <div class="pony-chat-input-area">
+        <!-- Image attachment previews -->
+        <div v-if="attachedImages.length" class="pony-attach-previews">
+          <div
+            v-for="(img, i) in attachedImages"
+            :key="i"
+            class="pony-attach-thumb"
+          >
+            <img :src="img.dataUrl" :alt="img.name" />
+            <button class="pony-attach-remove" @click="removeImage(i)">&times;</button>
+          </div>
+        </div>
+        <input
+          ref="fileInput"
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          multiple
+          class="pony-file-input"
+          @change="handleFileSelect"
+        />
+        <textarea
+          v-model="inputText"
+          class="pony-chat-textarea"
+          placeholder="Describe tu escena en español… Ej: dos chicas en una ducha, una arrodillada…"
+          rows="2"
+          @keydown.enter.prevent="handleEnter"
+          :disabled="loading || generating"
+        ></textarea>
+      </div>
       <div class="pony-chat-buttons">
+        <button
+          class="btn-attach"
+          @click="triggerFilePicker"
+          :disabled="loading || generating || attachedImages.length >= MAX_IMAGES"
+          title="Adjuntar imagen de referencia"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+        </button>
         <button
           class="btn-generate"
           @click="generate"
@@ -109,13 +173,19 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '../composables/useApi.js'
 import { usePonyStore } from '../composables/usePonyStore.js'
 import { composeTags, PONY_CATEGORIES } from '../config/ponyDiffusion.js'
 
 const api = useApi()
-const { ponyState, getConfigContext, getCurrentTagString, applyAiResponse } = usePonyStore()
+const route = useRoute()
+const router = useRouter()
+const {
+  ponyState, getConfigContext, getCurrentTagString, applyAiResponse, applyTextToConfig, clearAll,
+  projects, createProject, saveProjectState, loadProjectState, deleteProject,
+} = usePonyStore()
 
 const inputText = ref('')
 const messages = ref([])
@@ -123,6 +193,56 @@ const loading = ref(false)
 const generating = ref(false)
 const showTagSummary = ref(true)
 const chatRef = ref(null)
+const currentProjectIdx = ref(0)
+
+// ── Init: restore last project or create first one ──
+
+onMounted(() => {
+  const projectId = route.params.projectId
+  if (projectId) {
+    const idx = projects.findIndex(p => p.id === projectId)
+    if (idx >= 0) {
+      currentProjectIdx.value = idx
+      const msgs = loadProjectState(projectId)
+      if (msgs) messages.value = msgs
+      return
+    }
+  }
+  // Fallback: last project or create new
+  if (projects.length) {
+    currentProjectIdx.value = projects.length - 1
+    const last = projects[currentProjectIdx.value]
+    const msgs = loadProjectState(last.id)
+    if (msgs) messages.value = msgs
+  } else {
+    createProject()
+    currentProjectIdx.value = 0
+  }
+  syncUrlWithProject()
+})
+
+// Sync URL when route param changes (browser back/forward)
+watch(() => route.params.projectId, (newId, oldId) => {
+  if (!newId || newId === oldId) return
+  const idx = projects.findIndex(p => p.id === newId)
+  if (idx < 0 || idx === currentProjectIdx.value) return
+  saveCurrentProject()
+  currentProjectIdx.value = idx
+  const msgs = loadProjectState(newId)
+  messages.value = msgs || []
+  showTagSummary.value = true
+  inputText.value = ''
+  attachedImages.value = []
+  scrollBottom()
+})
+
+// Save on page close
+window.addEventListener('beforeunload', saveCurrentProject)
+
+// ── Image attachments ──
+const attachedImages = ref([])
+const fileInput = ref(null)
+const MAX_IMAGES = 4
 
 const suggestions = [
   'chica sumisa atada a una cama, vendada, con expresión de miedo y excitación',
@@ -148,6 +268,53 @@ const activeCategoryCount = computed(() => {
   return count
 })
 
+// ── Image attachment helpers ──
+
+function triggerFilePicker() {
+  fileInput.value?.click()
+}
+
+function handleFileSelect(e) {
+  const files = e.target.files
+  if (!files?.length) return
+  const remaining = MAX_IMAGES - attachedImages.value.length
+  const toProcess = Array.from(files).slice(0, remaining)
+  for (const file of toProcess) {
+    if (!file.type.startsWith('image/')) continue
+    compressImage(file, 1024, 0.75).then(dataUrl => {
+      attachedImages.value.push({ dataUrl, name: file.name })
+    })
+  }
+  e.target.value = ''
+}
+
+function removeImage(idx) {
+  attachedImages.value.splice(idx, 1)
+}
+
+function compressImage(file, maxDim, quality) {
+  return new Promise(resolve => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      let { width, height } = img
+      if (width > maxDim || height > maxDim) {
+        const ratio = Math.min(maxDim / width, maxDim / height)
+        width = Math.round(width * ratio)
+        height = Math.round(height * ratio)
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(img, 0, 0, width, height)
+      resolve(canvas.toDataURL('image/jpeg', quality))
+    }
+    img.src = url
+  })
+}
+
 // ── Helpers ──
 
 function scrollBottom() {
@@ -156,41 +323,213 @@ function scrollBottom() {
   })
 }
 
-// ── Chat with DeepSeek ──
+function syncUrlWithProject() {
+  const p = projects[currentProjectIdx.value]
+  if (p) {
+    router.replace({ name: 'PonyChatProject', params: { projectId: p.id } })
+  } else {
+    router.replace({ name: 'PonyChat' })
+  }
+}
+
+// ── Projects ──
+
+function saveCurrentProject() {
+  const idx = currentProjectIdx.value
+  const p = projects[idx]
+  if (!p) return
+  // Auto-name from first user message
+  if (!p.name.startsWith('Proyecto') && p.name) {
+    // custom name, keep it
+  } else {
+    const firstUser = messages.value.find(m => m.role === 'user')
+    p.name = firstUser
+      ? firstUser.content.slice(0, 40) + (firstUser.content.length > 40 ? '…' : '')
+      : `Proyecto ${idx + 1}`
+  }
+  saveProjectState(p.id, messages.value)
+}
+
+function switchProject(idx) {
+  if (idx === currentProjectIdx.value || idx < 0 || idx >= projects.length) return
+  // Save current
+  saveCurrentProject()
+  // Switch
+  currentProjectIdx.value = idx
+  const p = projects[idx]
+  const msgs = loadProjectState(p.id)
+  messages.value = msgs || []
+  showTagSummary.value = true
+  inputText.value = ''
+  attachedImages.value = []
+  syncUrlWithProject()
+  scrollBottom()
+}
+
+function deleteProjectAt(idx) {
+  if (projects.length <= 1) {
+    // Can't delete last — reset instead
+    clearAll()
+    messages.value = []
+    showTagSummary.value = true
+    inputText.value = ''
+    attachedImages.value = []
+    scrollBottom()
+    return
+  }
+  const p = projects[idx]
+  if (!p) return
+  const wasCurrent = idx === currentProjectIdx.value
+  deleteProject(p.id)
+  // Adjust currentProjectIdx if needed
+  if (wasCurrent) {
+    const target = Math.min(idx, projects.length - 1)
+    currentProjectIdx.value = target
+    const next = projects[target]
+    const msgs = loadProjectState(next.id)
+    messages.value = msgs || []
+  } else if (idx < currentProjectIdx.value) {
+    currentProjectIdx.value--
+  }
+  showTagSummary.value = true
+  inputText.value = ''
+  attachedImages.value = []
+  syncUrlWithProject()
+  scrollBottom()
+}
+
+// ── New project — save current, create blank tab ──
+
+function newProject() {
+  saveCurrentProject()
+  createProject()
+  currentProjectIdx.value = projects.length - 1
+  clearAll()
+  messages.value = []
+  showTagSummary.value = true
+  inputText.value = ''
+  attachedImages.value = []
+  syncUrlWithProject()
+  scrollBottom()
+}
+
+// ── Send message → local tag matching + optional DeepSeek + auto-gen ──
 
 async function sendMessage(text) {
   const msg = (text || inputText.value).trim()
   if (!msg || loading.value || generating.value) return
 
-  messages.value.push({ role: 'user', content: msg })
+  const userMsg = { role: 'user', content: msg }
+  const imgs = attachedImages.value.slice()
+  if (imgs.length) {
+    userMsg.images = imgs.map(i => i.dataUrl)
+  }
+  messages.value.push(userMsg)
   inputText.value = ''
-  loading.value = true
+  attachedImages.value = []
+
+  // STEP 1: Local keyword matching → immediate config update
+  const localResult = applyTextToConfig(msg)
+  const tagLines = localResult.changes.map(c => `• ${c.label}: ${c.option}`)
+
   scrollBottom()
 
-  try {
-    const configContext = getConfigContext()
-    const curTags = getCurrentTagString()
-    const res = await api.ponyChat(
-      messages.value.map(m => ({ role: m.role, content: m.content })),
-      { configContext, currentTags: curTags }
-    )
-
-    const summary = applyAiResponse(res.text)
-
-    let displayText = res.text
-    const changes = []
-    if (summary.changed.length) changes.push(`${summary.changed.length} categoría(s) actualizada(s)`)
-    if (summary.rawTagsAdded.length) changes.push(`${summary.rawTagsAdded.length} raw tag(s) añadida(s)`)
-    if (summary.negativePromptChanged) changes.push('negative prompt actualizado')
-    if (changes.length) displayText += `\n\n✅ Tags aplicadas al configurador: ${changes.join(', ')}.`
-
-    messages.value.push({ role: 'assistant', content: displayText })
-  } catch (e) {
-    messages.value.push({ role: 'assistant', content: `Error: ${e.message}` })
-  } finally {
-    loading.value = false
-    scrollBottom()
+  // STEP 2: AI tag refinement (independent from gen)
+  let aiResult = null
+  let aiError = null
+  if (api.ponyChat) {
+    loading.value = true
+    try {
+      const configContext = getConfigContext()
+      const curTags = getCurrentTagString()
+      const res = await api.ponyChat(
+        messages.value.map(m => {
+          if (m.role === 'user' && m.images?.length) {
+            return {
+              role: m.role,
+              content: m.content + `\n\n[El usuario adjuntó ${m.images.length} imagen(es) de referencia — tenlas en cuenta para escena, composición, pose y estilo al generar los tags]`
+            }
+          }
+          return { role: m.role, content: m.content }
+        }),
+        { configContext, currentTags: curTags }
+      )
+      const summary = applyAiResponse(res.text)
+      aiResult = { text: res.text, summary }
+    } catch (e) {
+      aiError = e
+      console.warn('AI chat failed, proceeding with local tags:', e.message)
+    } finally {
+      loading.value = false
+    }
   }
+
+  // STEP 3: Build display text
+  let displayText = ''
+  if (aiResult) {
+    displayText = aiResult.text
+    const summary = aiResult.summary
+    const aiChanges = []
+    if (summary.changed.length) aiChanges.push(`${summary.changed.length} categoría(s) actualizada(s)`)
+    if (summary.rawTagsAdded.length) aiChanges.push(`${summary.rawTagsAdded.length} raw tag(s) añadida(s)`)
+    if (summary.negativePromptChanged) aiChanges.push('negative prompt actualizado')
+    if (aiChanges.length) displayText += `\n\n✅ IA aplicó cambios: ${aiChanges.join(', ')}.`
+    if (localResult.changes.length && aiChanges.length === 0) {
+      displayText += `\n\n📌 Tags por palabras clave: ${localResult.changes.map(c => c.option).join(', ')}`
+    }
+  } else if (tagLines.length) {
+    displayText = `✅ Tags aplicadas al configurador:\n${tagLines.join('\n')}`
+    if (aiError) {
+      displayText += `\n\n⚠️ IA no disponible (${aiError.message}), imagen generada con tags locales.`
+    } else {
+      displayText += '\n\nRevisa el configurador y pulsa "Generar" cuando estés listo.'
+    }
+  } else {
+    displayText = aiError
+      ? `Error AI: ${aiError.message}`
+      : 'No se detectaron tags en tu mensaje. Prueba a describir: "chica pelirroja desnuda en la ducha" o "sumisa atada a la cama".'
+  }
+
+  // STEP 4: Auto-generate image (always try if tags exist)
+  const curTagString = getCurrentTagString()
+  if (curTagString) {
+    generating.value = true
+    try {
+      const neg = ponyState.negativePrompt.trim() || 'bad anatomy, ugly, distorted, low quality, worst quality'
+      const sel = ponyState.selections
+      const isPhotorealistic = sel.emphasis?.id === 'photorealistic'
+      const isAnime = sel.emphasis?.id === 'anime'
+      const hasAction = sel.action?.id !== 'none'
+      const params = {
+        cfg: isPhotorealistic ? 5 : isAnime ? 9 : (hasAction ? 7.5 : 7),
+        steps: isPhotorealistic ? 25 : isAnime ? 38 : (hasAction ? 34 : 30),
+        sampler: isPhotorealistic ? 'Euler a' : isAnime ? 'DPM++ 2M SDE Karras' : 'DPM++ 2M Karras',
+        width: 1024,
+        height: 1024,
+      }
+
+      const genRes = await api.ponyGenerate(curTagString, neg, params, imgs.map(i => i.dataUrl))
+
+      messages.value.push({
+        role: 'assistant',
+        content: displayText,
+        imageUrl: genRes.dataUrl || genRes.imageUrl,
+        meta: `${genRes.model} · ${genRes.params.steps} steps · CFG ${genRes.params.cfg}`
+      })
+    } catch (e) {
+      messages.value.push({
+        role: 'assistant',
+        content: `${displayText}\n\nError generando: ${e.message}`
+      })
+    } finally {
+      generating.value = false
+    }
+  } else if (displayText) {
+    messages.value.push({ role: 'assistant', content: displayText })
+  }
+
+  scrollBottom()
+  saveCurrentProject()
 }
 
 function handleEnter(e) {
@@ -233,6 +572,7 @@ async function generate() {
   } finally {
     generating.value = false
     scrollBottom()
+    saveCurrentProject()
   }
 }
 
@@ -258,6 +598,94 @@ function previewImage(url) {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+/* ── Project tabs ── */
+.pony-project-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 8px 32px 0;
+  background: var(--bg-deep);
+  flex-shrink: 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+}
+
+.pony-project-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-family: inherit;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+  position: relative;
+  min-width: 0;
+  max-width: 180px;
+}
+
+.pony-project-tab:hover {
+  color: var(--fg);
+  background: var(--surface-2);
+}
+
+.pony-project-tab.active {
+  color: var(--fg);
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+.pony-project-tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pony-project-tab-close {
+  font-size: 14px;
+  line-height: 1;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+  padding: 0 2px;
+}
+
+.pony-project-tab:hover .pony-project-tab-close {
+  opacity: 1;
+}
+
+.pony-project-tab-close:hover {
+  color: #ff5282;
+}
+
+.pony-project-tab-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  font-family: inherit;
+  background: transparent;
+  color: var(--muted);
+  border: 1px dashed var(--border);
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.pony-project-tab-add:hover {
+  color: #ff5282;
+  border-color: #ff5282;
+  background: rgba(255, 82, 130, 0.06);
 }
 
 /* ── Empty state ── */
@@ -350,6 +778,25 @@ function previewImage(url) {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.btn-clear-tags {
+  background: none;
+  border: none;
+  padding: 3px;
+  cursor: pointer;
+  color: var(--muted);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  line-height: 1;
+}
+
+.btn-clear-tags:hover {
+  color: #ff5282;
+  background: rgba(255, 82, 130, 0.1);
 }
 
 .tag-count-badge {
@@ -604,6 +1051,108 @@ function previewImage(url) {
   }
 }
 
+/* ── Image attachments in messages ── */
+.pony-msg-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.pony-msg-attach-img {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.pony-msg-attach-img:hover {
+  border-color: #ff5282;
+}
+
+/* ── Input area with image previews ── */
+.pony-chat-input-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pony-file-input {
+  display: none;
+}
+
+.pony-attach-previews {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pony-attach-thumb {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.pony-attach-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pony-attach-remove {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  border: none;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.pony-attach-remove:hover {
+  background: rgba(255, 0, 0, 0.8);
+}
+
+.btn-attach {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  padding: 10px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-attach:hover:not(:disabled) {
+  color: var(--fg);
+  border-color: #7c3aed;
+}
+
+.btn-attach:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .spinner {
   display: inline-block;
   width: 16px;
@@ -628,6 +1177,10 @@ function previewImage(url) {
 }
 
 @media (max-width: 900px) {
+  .pony-project-tabs {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
   .pony-chat-messages,
   .pony-chat-input {
     padding-left: 16px !important;

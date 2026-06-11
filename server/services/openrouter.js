@@ -29,10 +29,14 @@ export function callApi({ model, messages, apiKey, modalities, maxTokens }) {
         try {
           const j = JSON.parse(data)
           if (j.error) {
+            const errCode = (typeof j.error === 'object' && j.error.code) ? j.error.code : (res.statusCode || 500)
             const errMsg = typeof j.error === 'string' ? j.error : JSON.stringify(j.error, null, 2)
             console.error('🤖 OpenRouter error:', errMsg)
             console.error('  raw:', data.slice(0, 1000))
-            return reject(errMsg)
+            const err = new Error(errMsg)
+            err.statusCode = errCode
+            err.isRateLimit = errCode === 429
+            return reject(err)
           }
 
           const msg = j.choices?.[0]?.message
@@ -63,12 +67,12 @@ export function callApi({ model, messages, apiKey, modalities, maxTokens }) {
             raw: j
           })
         } catch (e) {
-          reject(`Parse error: ${e.message}\n${data.slice(0, 500)}`)
+          reject(new Error(`Parse error: ${e.message}\n${data.slice(0, 500)}`))
         }
       })
     })
 
-    req.on('error', (e) => reject(`Request error: ${e.message}`))
+    req.on('error', (e) => reject(new Error(`Request error: ${e.message}`)))
     req.write(body)
     req.end()
   })

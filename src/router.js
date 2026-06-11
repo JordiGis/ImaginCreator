@@ -9,7 +9,16 @@ const routes = [
   { path: '/chat', component: ChatView, name: 'Chat' },
   { path: '/chat/:id', component: ChatView, name: 'ChatSession' },
   { path: '/character', component: CharacterConfigurator, name: 'Character' },
-  { path: '/pony', component: PonyView, name: 'Pony' },
+  {
+    path: '/pony',
+    component: PonyView,
+    children: [
+      { path: '', redirect: { name: 'PonyConfig' } },
+      { path: 'config', component: () => import('./components/PonyConfigurator.vue'), name: 'PonyConfig' },
+      { path: 'chat', component: () => import('./components/PonyChat.vue'), name: 'PonyChat' },
+      { path: 'chat/:projectId', component: () => import('./components/PonyChat.vue'), name: 'PonyChatProject' },
+    ]
+  },
   { path: '/gallery', component: ImageGallery, name: 'Gallery' }
 ]
 

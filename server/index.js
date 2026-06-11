@@ -63,6 +63,38 @@ function parseBody(req) {
   })
 }
 
+// ── AI model fallback chain ──
+// On 429 (rate limit), try next model. Free models first, paid fallback last.
+const TEXT_MODEL_FALLBACKS = [
+  'deepseek/deepseek-chat',                    // Free (DeepInfra)
+  'deepseek/deepseek-r1',                      // Free (DeepInfra)
+  'qwen/qwq-32b:free',                        // Free (different provider)
+  'nousresearch/hermes-3-llama-3.1-70b:free', // Free (different provider)
+  'google/gemini-2.0-flash-001',              // Paid fallback ($0.10/1M tokens)
+]
+
+async function callWithFallback(modelList, messages, apiKey) {
+  const errors = []
+  for (let i = 0; i < modelList.length; i++) {
+    try {
+      return await callApi({ model: modelList[i], messages, apiKey })
+    } catch (e) {
+      errors.push({ model: modelList[i], error: e.isRateLimit ? 'rate_limited' : e.message })
+      if (e.isRateLimit) {
+        const nextModel = modelList[i + 1]
+        console.error(`⚠️ 429 on ${modelList[i]}${nextModel ? ` → trying ${nextModel}` : ' — no more fallbacks'}`)
+        continue
+      }
+      // Non-rate-limit error → fail fast
+      throw e
+    }
+  }
+  const summary = errors.map(e => `${e.model}: ${e.error}`).join('; ')
+  const err = new Error(`All AI models failed — ${summary}`)
+  err.modelsTried = errors
+  throw err
+}
+
 // ── Routes ──
 
 async function handleRequest(req, res) {
@@ -204,20 +236,20 @@ async function handleRequest(req, res) {
     return json(res, 200, { cached: cached.hit, hash: cached.hit ? cached.hash : null })
   }
 
-  // POST /api/translate — translate text to English using DeepSeek
+  // POST /api/translate — translate text to English using AI with model fallback
   if (method === 'POST' && url.pathname === '/api/translate') {
     try {
       const { text } = await parseBody(req)
       if (!text || !text.trim()) return json(res, 400, { error: 'Text required' })
 
-      const result = await callApi({
-        model: 'deepseek/deepseek-chat',
-        messages: [
+      const result = await callWithFallback(
+        TEXT_MODEL_FALLBACKS,
+        [
           { role: 'system', content: 'You are a translator. Translate the following text to fluent English suitable for an AI image generation prompt. Return ONLY the translation — no quotes, no explanations, no extra text, no markdown.' },
           { role: 'user', content: text.trim() }
         ],
-        apiKey: KEY
-      })
+        KEY
+      )
 
       return json(res, 200, { translated: result.text || text.trim() })
     } catch (e) {
@@ -239,26 +271,53 @@ async function handleRequest(req, res) {
   // POST /api/pony/generate — generate image via local SD WebUI Pony model
   if (method === 'POST' && url.pathname === '/api/pony/generate') {
     try {
-      const { prompt, negativePrompt, params } = await parseBody(req)
+      const { prompt, negativePrompt, params, images } = await parseBody(req)
       if (!prompt || !prompt.trim()) return json(res, 400, { error: 'Prompt required' })
 
-      const body = JSON.stringify({
-        prompt: prompt.trim(),
-        negative_prompt: negativePrompt || 'bad anatomy, ugly, distorted, low quality, worst quality',
-        width: params?.width || 1024,
-        height: params?.height || 1024,
-        steps: params?.steps || 30,
-        cfg_scale: params?.cfg || 7,
-        sampler_name: params?.sampler || 'DPM++ 2M Karras',
-        seed: params?.seed || -1,
-        batch_size: 1,
-      })
+      // Strip data URL prefix for raw base64 (SD WebUI expects raw base64)
+      function stripPrefix(d) {
+        const i = d.indexOf(',')
+        return i >= 0 ? d.slice(i + 1) : d
+      }
+
+      const isImg2Img = images?.length > 0
+      let sdPath, body
+
+      if (isImg2Img) {
+        body = JSON.stringify({
+          init_images: images.map(stripPrefix),
+          denoising_strength: params?.denoising || 0.75,
+          prompt: prompt.trim(),
+          negative_prompt: negativePrompt || 'bad anatomy, ugly, distorted, low quality, worst quality',
+          width: params?.width || 1024,
+          height: params?.height || 1024,
+          steps: params?.steps || 30,
+          cfg_scale: params?.cfg || 7,
+          sampler_name: params?.sampler || 'DPM++ 2M Karras',
+          seed: params?.seed || -1,
+          batch_size: 1,
+        })
+        sdPath = '/sdapi/v1/img2img'
+      } else {
+        body = JSON.stringify({
+          prompt: prompt.trim(),
+          negative_prompt: negativePrompt || 'bad anatomy, ugly, distorted, low quality, worst quality',
+          width: params?.width || 1024,
+          height: params?.height || 1024,
+          steps: params?.steps || 30,
+          cfg_scale: params?.cfg || 7,
+          sampler_name: params?.sampler || 'DPM++ 2M Karras',
+          seed: params?.seed || -1,
+          batch_size: 1,
+        })
+        sdPath = '/sdapi/v1/txt2img'
+      }
 
       const sdResult = await new Promise((resolve, reject) => {
         const opts = {
           hostname: '127.0.0.1',
           port: 7860,
-          path: '/sdapi/v1/txt2img',
+          path: sdPath,
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -294,6 +353,7 @@ async function handleRequest(req, res) {
         model: 'Pony Diffusion V6 XL',
         params: { steps: body.steps, cfg: body.cfg_scale, sampler: body.sampler_name, width: body.width, height: body.height },
         file: saved.name,
+        img2img: isImg2Img,
       })
     } catch (e) {
       console.error('❌ Pony generate error:', e)
@@ -301,7 +361,7 @@ async function handleRequest(req, res) {
     }
   }
 
-  // POST /api/pony/chat — chat with DeepSeek Flash for Pony tag assistance
+  // POST /api/pony/chat — chat with AI for Pony tag assistance (with model fallback)
   if (method === 'POST' && url.pathname === '/api/pony/chat') {
     try {
       const { messages, configContext, currentTags } = await parseBody(req)
@@ -356,14 +416,14 @@ REGLAS ADICIONALES:
 - Los tags que no estén en las categorías del configurador se añadirán automáticamente como raw tags.
 - Si el usuario pide "amplía" o "más tags", añade todos los tags Danbooru relevantes que se te ocurran.`
 
-      const result = await callApi({
-        model: 'deepseek/deepseek-chat',
-        messages: [
+      const result = await callWithFallback(
+        TEXT_MODEL_FALLBACKS,
+        [
           { role: 'system', content: systemContent },
           ...messages
         ],
-        apiKey: KEY
-      })
+        KEY
+      )
 
       return json(res, 200, { text: result.text, usage: result.usage })
     } catch (e) {

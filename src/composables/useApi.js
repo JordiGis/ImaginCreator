@@ -54,11 +54,11 @@ export function useApi() {
     return data.translated
   }
 
-  async function ponyGenerate(prompt, negativePrompt, params = {}) {
+  async function ponyGenerate(prompt, negativePrompt, params = {}, images = []) {
     const res = await fetch('/api/pony/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, negativePrompt, params })
+      body: JSON.stringify({ prompt, negativePrompt, params, images })
     })
     const text = await res.text()
     let data
