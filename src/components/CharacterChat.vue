@@ -126,51 +126,45 @@
 
     <!-- Input area -->
     <div class="chat-input-area">
-      <div class="fmt-buttons">
-        <button class="fmt-btn speech" @click="insertFmt('speech')" :disabled="generating">
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 14px;"><path d="M6 5.5a4 4 0 118 0v2a4 4 0 01-8 0v-2z"/><path d="M3 9.5a7 7 0 0114 0M10 16v3"/></svg>
-          <span class="fmt-label">" "</span>
+      <div class="fmt-row">
+        <button class="collapse-btn" @click="inputCollapsed = !inputCollapsed" :title="inputCollapsed ? 'Expandir input' : 'Plegar input'">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" :class="{ rotated: !inputCollapsed }"><path d="M14 8l-4 4-4-4"/></svg>
         </button>
         <button class="fmt-btn thought" @click="insertFmt('thought')" :disabled="generating">
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 14px;"><circle cx="10" cy="10" r="6"/><path d="M10 7v3l2 2"/></svg>
-          <span class="fmt-label">( )</span>
+          <span class="fmt-label">💭 ( )</span>
         </button>
         <button class="fmt-btn narration" @click="insertFmt('narration')" :disabled="generating">
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 14px;"><path d="M4 16l4-12M10 16l4-12"/></svg>
-          <span class="fmt-label">* *</span>
+          <span class="fmt-label">🌍 [ ]</span>
         </button>
-      </div>
-      <div class="scene-action-row">
+        <span class="fmt-sep"></span>
         <button
-          class="scene-img-btn"
+          class="fmt-btn scene-btn"
           @click="generateSceneImage"
           :disabled="generating || generatingSceneImage || messages.length === 0"
           :title="generatingSceneImage ? 'Generando imagen...' : 'Generar imagen de la escena actual con Pony'"
         >
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="16" height="14" rx="2"/><circle cx="7.5" cy="8.5" r="1.5"/><path d="M2 14l4.5-4.5 3 3 3-3L18 15"/></svg>
-          <span v-if="generatingSceneImage">🎨 Generando escena...</span>
-          <span v-else>🎨 Escena → Imagen Pony</span>
+          <span>{{ generatingSceneImage ? '⏳' : '🎨' }}</span>
         </button>
-      </div>
-      <div class="input-row">
-        <textarea
-          ref="inputRef"
-          v-model="inputText"
-          class="chat-textarea"
-          placeholder='Escribe aquí... Enter = salto de línea, Ctrl+Enter = enviar. Usa "texto" hablar, (texto) pensar, *texto* narrar'
-          @keydown="handleKeydown"
-          :disabled="generating"
-          rows="1"
-          @input="autoResizeTextarea"
-        ></textarea>
+        <div class="fmt-spacer"></div>
         <button
           class="send-btn"
           @click="sendMessage"
           :disabled="!inputText.trim() || generating"
-          title="Enviar mensaje"
+          title="Enviar mensaje (Ctrl+Enter)"
         >
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17V3M3 10l7-7 7 7"/></svg>
         </button>
+      </div>
+      <div class="input-row" v-show="!inputCollapsed">
+        <textarea
+          ref="inputRef"
+          v-model="inputText"
+          class="chat-textarea"
+          placeholder='Escribe... Enter ↵ salto, Ctrl+Enter = enviar. (texto) pensar, [texto] narrar'
+          @keydown="handleKeydown"
+          :disabled="generating"
+          @input="autoResizeTextarea"
+        ></textarea>
       </div>
     </div>
   </div>
@@ -189,6 +183,7 @@ const inputText = ref('')
 const generating = ref(false)
 const error = ref('')
 const generatingSceneImage = ref(false)
+const inputCollapsed = ref(false)
 const chatRef = ref(null)
 const inputRef = ref(null)
 let msgCounter = 0
@@ -199,8 +194,7 @@ const STORAGE_KEY_PREFIX = 'ichar-msg-'
 const greetingPreview = computed(() => {
   if (!character.value?.greeting) return 'No hay saludo disponible.'
   const stripped = character.value.greeting
-    .replace(/\*[^*]*\*/g, '')
-    .replace(/"[^"]*"/g, '')
+    .replace(/\[[^\]]*\]/g, '')
     .replace(/\([^)]*\)/g, '')
     .replace(/\s+/g, ' ')
     .trim()
@@ -214,16 +208,15 @@ function parseRaw(msg) {
     return [{ type: msg.type, display: msg.content }]
   }
   const segments = []
-  const re = /"([^"]*)"|\(([^)]*)\)|\*([^*]*)\*/g
+  const re = /\(([^)]*)\)|\[([^\]]*)\]/g
   let last = 0, m
   while ((m = re.exec(raw)) !== null) {
     if (m.index > last) {
       const plain = raw.slice(last, m.index).trim()
       if (plain) segments.push({ type: 'speech', display: plain })
     }
-    if (m[1] !== undefined) segments.push({ type: 'speech', display: m[1] })
-    else if (m[2] !== undefined) segments.push({ type: 'thought', display: '(' + m[2] + ')' })
-    else if (m[3] !== undefined) segments.push({ type: 'narration', display: '*' + m[3] + '*' })
+    if (m[1] !== undefined) segments.push({ type: 'thought', display: '(' + m[1] + ')' })
+    else if (m[2] !== undefined) segments.push({ type: 'narration', display: '[' + m[2] + ']' })
     last = m.index + m[0].length
   }
   if (last < raw.length) {
@@ -256,9 +249,8 @@ function insertFmt(type) {
   const end = el.selectionEnd
   const sel = inputText.value.slice(start, end)
   let pre = '', post = ''
-  if (type === 'speech') { pre = '"'; post = '"' }
-  else if (type === 'thought') { pre = '('; post = ')' }
-  else if (type === 'narration') { pre = '*'; post = '*' }
+  if (type === 'thought') { pre = '('; post = ')' }
+  else if (type === 'narration') { pre = '['; post = ']' }
   const wrapped = pre + (sel || '') + post
   inputText.value = inputText.value.slice(0, start) + wrapped + inputText.value.slice(end)
   const cursor = start + pre.length + (sel ? sel.length : 0)
@@ -266,12 +258,8 @@ function insertFmt(type) {
 }
 
 function detectType(text) {
-  if (text.startsWith('"') && text.endsWith('"')) return { type: 'speech', content: text.slice(1, -1) }
   if (text.startsWith('(') && text.endsWith(')')) return { type: 'thought', content: text.slice(1, -1) }
-  if (text.startsWith('*') && text.endsWith('*')) return { type: 'narration', content: text.slice(1, -1) }
-  if (text.startsWith('*')) return { type: 'narration', content: text }
-  if (text.startsWith('"')) return { type: 'speech', content: text }
-  if (text.startsWith('(')) return { type: 'thought', content: text }
+  if (text.startsWith('[') && text.endsWith(']')) return { type: 'narration', content: text.slice(1, -1) }
   return { type: 'speech', content: text }
 }
 
@@ -465,7 +453,7 @@ async function generateSceneImage() {
       _key: genKey(),
       role: 'assistant',
       type: 'narration',
-      raw: '*🎨 Ilustración de la escena*',
+      raw: '🎨 [Ilustración de la escena]',
       imageUrl: imgUrl,
     })
     saveMessages(character.value.id)
@@ -815,19 +803,11 @@ onMounted(() => {
 
 /* ── Segment Styles ── */
 .seg-speech {
-  color: #b0d8ff;
+  color: var(--fg);
 }
-
-.seg-speech::before { content: '\201c'; opacity: 0.45; }
-.seg-speech::after { content: '\201d'; opacity: 0.45; }
 
 .msg-row.user .seg-speech {
   color: rgba(255, 255, 255, 0.95);
-}
-
-.msg-row.user .seg-speech::before,
-.msg-row.user .seg-speech::after {
-  opacity: 0.5;
 }
 
 .seg-thought {
@@ -835,17 +815,17 @@ onMounted(() => {
   font-style: italic;
 }
 
+.msg-row.user .seg-thought {
+  color: rgba(200, 140, 255, 0.9);
+}
+
 .seg-narration {
-  color: #50dca0;
+  color: #ffb347;
   font-style: italic;
 }
 
 .msg-row.user .seg-narration {
   color: rgba(255, 255, 255, 0.8);
-}
-
-.msg-row.user .seg-thought {
-  color: rgba(200, 140, 255, 0.9);
 }
 
 /* ── Typing Indicator ── */
@@ -909,17 +889,13 @@ onMounted(() => {
 
 /* ── Input Area ── */
 .chat-input-area {
-  padding: 8px 16px 12px;
+  padding: 6px 16px 10px;
   border-top: 1px solid var(--border);
   background: var(--surface);
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-
-.fmt-buttons {
-  display: flex;
-  gap: 4px;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .fmt-btn {
@@ -929,12 +905,13 @@ onMounted(() => {
   background: none;
   border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 4px 10px;
-  font-size: 12px;
+  padding: 6px 12px;
+  font-size: 13px;
   color: var(--muted);
   cursor: pointer;
   transition: all 0.15s;
   font-family: inherit;
+  min-height: 34px;
 }
 
 .fmt-btn:hover:not(:disabled) {
@@ -946,12 +923,6 @@ onMounted(() => {
 .fmt-btn:disabled {
   opacity: 0.35;
   cursor: default;
-}
-
-.fmt-btn.speech:hover:not(:disabled) {
-  border-color: #b0d8ff;
-  color: #b0d8ff;
-  background: rgba(176, 216, 255, 0.06);
 }
 
 .fmt-btn.thought:hover:not(:disabled) {
@@ -967,14 +938,73 @@ onMounted(() => {
 }
 
 .fmt-label {
-  font-size: 11px;
-  opacity: 0.7;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.fmt-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 2px;
+  align-self: center;
+  flex-shrink: 0;
+}
+
+.fmt-spacer {
+  flex: 1;
+}
+
+.scene-btn {
+  font-size: 16px;
+  padding: 5px 8px !important;
+  min-width: 34px;
+  justify-content: center;
+}
+
+.fmt-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.collapse-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--muted);
+  transition: all 0.15s;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.collapse-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-subtle);
+}
+
+.collapse-btn svg {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.2s;
+}
+
+.collapse-btn svg.rotated {
+  transform: rotate(180deg);
 }
 
 .input-row {
   display: flex;
-  gap: 8px;
-  align-items: flex-end;
+  flex: 1;
+  min-height: 20vh;
 }
 
 .chat-textarea {
@@ -989,7 +1019,6 @@ onMounted(() => {
   outline: none;
   resize: none;
   line-height: 1.5;
-  max-height: 120px;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
@@ -1008,11 +1037,11 @@ onMounted(() => {
 }
 
 .send-btn {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 34px;
   background: var(--accent);
   border: none;
-  border-radius: 50%;
+  border-radius: 10px;
   color: #fff;
   cursor: pointer;
   display: flex;
@@ -1020,6 +1049,11 @@ onMounted(() => {
   justify-content: center;
   transition: all 0.2s;
   flex-shrink: 0;
+}
+
+.send-btn svg {
+  width: 16px;
+  height: 16px;
 }
 
 .send-btn:hover:not(:disabled) {
@@ -1037,45 +1071,7 @@ onMounted(() => {
   cursor: default;
 }
 
-/* ── Scene image generation ── */
-.scene-action-row {
-  display: flex;
-  gap: 6px;
-}
-
-.scene-img-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--bg-deep);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 6px 14px;
-  font-size: 12px;
-  color: var(--muted);
-  cursor: pointer;
-  transition: all 0.2s;
-  font-family: inherit;
-  width: 100%;
-  justify-content: center;
-}
-
-.scene-img-btn svg {
-  width: 16px;
-  height: 16px;
-}
-
-.scene-img-btn:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--accent-subtle);
-}
-
-.scene-img-btn:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
+/* ── Image display in chat ── */
 .img-gen-indicator {
   display: flex;
   align-items: center;
@@ -1207,7 +1203,41 @@ onMounted(() => {
     border-bottom-right-radius: 3px;
   }
   .chat-input-area {
-    padding: 8px 10px 10px;
+    padding: 6px 10px 10px;
+    gap: 6px;
+  }
+  .fmt-row {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .fmt-btn {
+    padding: 8px 14px;
+    font-size: 14px;
+    min-height: 40px;
+  }
+  .fmt-label {
+    font-size: 13px;
+  }
+  .collapse-btn {
+    width: 36px;
+    height: 36px;
+  }
+  .collapse-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+  .scene-btn {
+    font-size: 18px;
+    padding: 6px 10px !important;
+    min-width: 40px;
+  }
+  .send-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+  }
+  .input-row {
+    min-height: 15vh;
   }
   .chat-textarea {
     font-size: 16px;
