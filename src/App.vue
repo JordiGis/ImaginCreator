@@ -1,7 +1,22 @@
 <template>
   <div class="app">
+    <!-- ===== Mobile header bar (< 640px) ===== -->
+    <header class="mobile-header">
+      <button class="hamburger" @click="mobileMenuOpen = !mobileMenuOpen" aria-label="Menú">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 5h14M3 10h14M3 15h14"/></svg>
+      </button>
+      <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 22px; height: 22px; flex-shrink: 0;"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      <span class="mobile-title">ImaginCreator</span>
+      <button class="mobile-avatar" @click="mobileMenuOpen = true" aria-label="Abrir menú">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" style="width: 20px; height: 20px;"><circle cx="10" cy="7" r="3"/><path d="M3 17c0-4 3.13-6 7-6s7 2 7 6"/></svg>
+      </button>
+    </header>
+
+    <!-- ===== Overlay backdrop (mobile sidebar) ===== -->
+    <div v-if="mobileMenuOpen" class="sidebar-backdrop" @click="mobileMenuOpen = false" />
+
     <!-- ===== Sidebar ===== -->
-    <aside class="sidebar">
+    <aside :class="['sidebar', { open: mobileMenuOpen }]">
       <div class="sidebar-logo">
         <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 28px; height: 28px; margin-right: 4px;">
           <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
@@ -43,24 +58,37 @@
           to="/character"
           class="nav-tab"
           active-class="active"
+          @click="mobileMenuOpen = false"
         >
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="10" cy="7" r="3"/><path d="M3 17c0-4 3.13-6 7-6s7 2 7 6"/></svg>
-          <span>Personajes</span>
+          <span>Creador</span>
         </router-link>
-        
+
+        <router-link
+          to="/characters"
+          class="nav-tab"
+          active-class="active"
+          @click="mobileMenuOpen = false"
+        >
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M10 2l4 4h-3v4h-2V6H6l4-4z"/><path d="M2 18h16"/><path d="M5 14h10a1 1 0 011 1v3H4v-3a1 1 0 011-1z"/></svg>
+          <span>Roleplay</span>
+        </router-link>
+
         <router-link
           to="/pony"
           class="nav-tab"
           active-class="active"
+          @click="mobileMenuOpen = false"
         >
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3.5 8.5C3.5 5 6 2.5 10 2.5s6.5 2.5 6.5 6c0 4.5-6.5 9-6.5 9S3.5 13 3.5 8.5z"/><circle cx="10" cy="8" r="1.5"/></svg>
           <span>Pony NSFW</span>
         </router-link>
-        
+
         <router-link
           to="/gallery"
           class="nav-tab"
           active-class="active"
+          @click="mobileMenuOpen = false"
         >
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="2" width="6" height="6"/><rect x="12" y="2" width="6" height="6"/><rect x="2" y="12" width="6" height="6"/><rect x="12" y="12" width="6" height="6"/></svg>
           <span>Galería</span>
@@ -88,6 +116,30 @@
     <main class="main">
       <router-view />
     </main>
+
+    <!-- ===== Bottom nav (mobile < 640px) ===== -->
+    <nav class="bottom-nav">
+      <router-link to="/chat" class="bottom-nav-item" :class="{ active: $route.path.startsWith('/chat') }">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 3h14a2 2 0 012 2v10a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2z"/></svg>
+        <span>Chats</span>
+      </router-link>
+      <router-link to="/characters" class="bottom-nav-item" :class="{ active: $route.path.startsWith('/characters') }">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M10 2l4 4h-3v4h-2V6H6l4-4z"/><path d="M2 18h16"/><path d="M5 14h10a1 1 0 011 1v3H4v-3a1 1 0 011-1z"/></svg>
+        <span>Roleplay</span>
+      </router-link>
+      <router-link to="/character" class="bottom-nav-item" :class="{ active: $route.path === '/character' }">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="10" cy="7" r="3"/><path d="M3 17c0-4 3.13-6 7-6s7 2 7 6"/></svg>
+        <span>Creador</span>
+      </router-link>
+      <router-link to="/pony" class="bottom-nav-item" :class="{ active: $route.path.startsWith('/pony') }">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3.5 8.5C3.5 5 6 2.5 10 2.5s6.5 2.5 6.5 6c0 4.5-6.5 9-6.5 9S3.5 13 3.5 8.5z"/><circle cx="10" cy="8" r="1.5"/></svg>
+        <span>Pony</span>
+      </router-link>
+      <router-link to="/gallery" class="bottom-nav-item" :class="{ active: $route.path === '/gallery' }">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="2" width="6" height="6"/><rect x="12" y="2" width="6" height="6"/><rect x="2" y="12" width="6" height="6"/><rect x="12" y="12" width="6" height="6"/></svg>
+        <span>Galería</span>
+      </router-link>
+    </nav>
   </div>
 </template>
 
@@ -106,6 +158,7 @@ const api = useApi()
 const credit = useCreditTracker()
 
 const chatsOpen = ref(true)
+const mobileMenuOpen = ref(false)
 
 const {
   currentModel,
@@ -128,6 +181,7 @@ function handleNewChat() {
   const id = newChat()
   router.push('/chat/' + id)
   chatsOpen.value = true
+  mobileMenuOpen.value = false
 }
 
 onMounted(() => {
@@ -155,6 +209,8 @@ onMounted(() => {
   --font: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', monospace;
   --sidebar-width: 280px;
+  --bottom-nav-h: 60px;
+  --mobile-header-h: 48px;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -176,6 +232,61 @@ html, body {
   overflow: hidden;
 }
 
+/* ── Mobile header (< 640px) ── */
+.mobile-header {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: var(--mobile-header-h);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  z-index: 50;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+}
+
+.hamburger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--fg);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 6px;
+}
+.hamburger svg { width: 22px; height: 22px; }
+.hamburger:active { background: var(--surface-2); }
+
+.mobile-title {
+  flex: 1;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.mobile-avatar {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+}
+.mobile-avatar:active { background: var(--surface-2); }
+
+/* ── Sidebar backdrop (mobile) ── */
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 40;
+  backdrop-filter: blur(3px);
+}
+
 /* ── Sidebar ── */
 .sidebar {
   width: var(--sidebar-width);
@@ -187,6 +298,7 @@ html, body {
   padding: 20px 16px;
   overflow-y: auto;
   z-index: 10;
+  transition: transform 0.25s ease, opacity 0.2s ease;
 }
 
 .sidebar-logo {
@@ -216,6 +328,11 @@ html, body {
   flex-direction: column;
   gap: 2px;
   margin-bottom: 24px;
+}
+
+.nav-tab-wrapper {
+  display: flex;
+  flex-direction: column;
 }
 
 .nav-tab {
@@ -267,25 +384,19 @@ html, body {
   opacity: 1;
   background: var(--surface-2);
 }
-.new-chat-icon-btn svg {
-  width: 16px;
-  height: 16px;
-}
+.new-chat-icon-btn svg { width: 16px; height: 16px; }
+
 .chevron {
   transition: transform 0.2s;
   opacity: 0.7;
 }
-.chevron.open {
-  transform: rotate(180deg);
-}
+.chevron.open { transform: rotate(180deg); }
 
 /* ── Session List ── */
 .session-list {
   display: flex;
   flex-direction: column;
-  margin-top: 4px;
-  margin-bottom: 12px;
-  margin-left: 20px;
+  margin: 4px 0 12px 20px;
   padding-left: 10px;
   border-left: 1px solid var(--border);
   gap: 2px;
@@ -302,17 +413,8 @@ html, body {
   font-size: 13px;
   transition: all 0.15s;
 }
-
-.session-item:hover {
-  background: var(--surface-2);
-  color: var(--fg);
-}
-
-.session-item.active {
-  color: var(--accent);
-  background: var(--surface-2);
-  font-weight: 500;
-}
+.session-item:hover { background: var(--surface-2); color: var(--fg); }
+.session-item.active { color: var(--accent); background: var(--surface-2); font-weight: 500; }
 
 .session-title {
   white-space: nowrap;
@@ -332,15 +434,8 @@ html, body {
   transition: opacity 0.15s;
   padding: 0 4px;
 }
-
-.session-item:hover .delete-session {
-  opacity: 1;
-}
-
-.delete-session:hover {
-  color: #ff5252;
-}
-
+.session-item:hover .delete-session { opacity: 1; }
+.delete-session:hover { color: #ff5252; }
 
 /* ── Sidebar Footer ── */
 .sidebar-footer {
@@ -374,24 +469,29 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 32px;
+  padding: 0 max(16px, calc((100% - 1200px) / 2 + 32px));
   height: 64px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
   flex-shrink: 0;
   z-index: 2;
+  gap: 12px;
 }
 
 .view-header h2 {
   font-size: 16px;
   font-weight: 600;
   color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .view-header-actions {
   display: flex;
   gap: 12px;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .new-chat-btn {
@@ -404,21 +504,18 @@ html, body {
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
   font-family: inherit;
+  white-space: nowrap;
 }
-
-.new-chat-btn:hover {
-  background: var(--surface-2);
-  color: var(--fg);
-}
+.new-chat-btn:hover { background: var(--surface-2); color: var(--fg); }
 
 /* ── Chat Messages ── */
 .chat-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 24px 32px;
+  padding: clamp(16px, 3vw, 32px) clamp(12px, 3vw, 32px);
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: clamp(14px, 2vw, 20px);
 }
 
 .empty-state {
@@ -428,17 +525,19 @@ html, body {
   align-items: center;
   justify-content: center;
   gap: 20px;
-  padding: 40px;
+  padding: clamp(24px, 5vw, 40px);
   color: var(--muted);
+  text-align: center;
 }
 
 .empty-state svg {
-  width: 72px; height: 72px;
+  width: clamp(56px, 8vw, 72px);
+  height: clamp(56px, 8vw, 72px);
   opacity: 0.25;
 }
 
 .empty-state h2 {
-  font-size: 20px;
+  font-size: clamp(16px, 2.5vw, 20px);
   font-weight: 500;
   color: var(--muted);
 }
@@ -455,36 +554,26 @@ html, body {
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 8px 16px;
-  font-size: 13px;
+  padding: clamp(6px, 1.2vw, 8px) clamp(12px, 2vw, 16px);
+  font-size: clamp(12px, 1.4vw, 13px);
   color: var(--muted);
   cursor: pointer;
   transition: all 0.15s;
   font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
 }
-
-.suggestion-chip:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--accent-subtle);
-}
+.suggestion-chip:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-subtle); }
+.suggestion-chip:active { background: var(--accent-subtle); }
 
 /* ── Message bubbles ── */
 .message {
   display: flex;
   flex-direction: column;
-  max-width: 75%;
+  max-width: clamp(85%, 75%, 75%);
 }
 
-.message.user {
-  align-self: flex-end;
-  align-items: flex-end;
-}
-
-.message.ai {
-  align-self: flex-start;
-  align-items: flex-start;
-}
+.message.user { align-self: flex-end; align-items: flex-end; }
+.message.ai { align-self: flex-start; align-items: flex-start; }
 
 .message-bubble {
   background: var(--surface-2);
@@ -504,7 +593,7 @@ html, body {
   border-bottom-left-radius: 4px;
 }
 
-.message .text { line-height: 1.5; }
+.message .text { line-height: 1.5; white-space: pre-wrap; }
 
 .image-previews {
   display: flex;
@@ -515,11 +604,13 @@ html, body {
 
 .image-preview-wrapper {
   position: relative;
-  width: 80px; height: 80px;
+  width: clamp(60px, 10vw, 80px);
+  height: clamp(60px, 10vw, 80px);
 }
 
 .image-preview-wrapper img {
-  width: 80px; height: 80px;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
@@ -527,9 +618,7 @@ html, body {
   transition: transform 0.1s;
 }
 
-.image-preview-wrapper img:hover {
-  transform: scale(1.05);
-}
+.image-preview-wrapper img:hover { transform: scale(1.05); }
 
 .ref-btn {
   position: absolute;
@@ -550,21 +639,15 @@ html, body {
   transition: background 0.1s;
   z-index: 2;
 }
-
-.image-preview-wrapper:hover .ref-btn {
-  display: grid;
-}
-
-.ref-btn:hover {
-  background: var(--accent-hover);
-}
+.image-preview-wrapper:hover .ref-btn { display: grid; }
+.ref-btn:hover { background: var(--accent-hover); }
 
 .message-meta {
   display: flex;
   align-items: center;
   gap: 12px;
   margin-top: 6px;
-  font-size: 12px;
+  font-size: clamp(11px, 1.3vw, 12px);
   color: var(--muted);
 }
 
@@ -598,17 +681,24 @@ html, body {
 
 /* ── Scrollbar ── */
 .sidebar::-webkit-scrollbar,
-.chat-messages::-webkit-scrollbar {
+.chat-messages::-webkit-scrollbar,
+.char-config::-webkit-scrollbar,
+.char-preview::-webkit-scrollbar,
+.gallery-content::-webkit-scrollbar {
   width: 6px;
 }
-
 .sidebar::-webkit-scrollbar-track,
-.chat-messages::-webkit-scrollbar-track {
+.chat-messages::-webkit-scrollbar-track,
+.char-config::-webkit-scrollbar-track,
+.char-preview::-webkit-scrollbar-track,
+.gallery-content::-webkit-scrollbar-track {
   background: transparent;
 }
-
 .sidebar::-webkit-scrollbar-thumb,
-.chat-messages::-webkit-scrollbar-thumb {
+.chat-messages::-webkit-scrollbar-thumb,
+.char-config::-webkit-scrollbar-thumb,
+.char-preview::-webkit-scrollbar-thumb,
+.gallery-content::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 3px;
 }
@@ -634,42 +724,148 @@ html, body {
   cursor: pointer;
   transition: all 0.15s;
   font-family: inherit;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
 }
-
-.pony-subtab:hover {
-  color: var(--fg);
-}
-
+.pony-subtab:hover { color: var(--fg); }
 .pony-subtab.active {
   background: var(--surface);
   color: var(--fg);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-/* ── Responsive ── */
-@media (max-width: 900px) {
+/* ── Bottom nav (mobile < 640px) ── */
+.bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: var(--bottom-nav-h);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  z-index: 50;
+  justify-content: space-around;
+  align-items: center;
+  padding: 4px 0 env(safe-area-inset-bottom, 4px) 0;
+}
+
+.bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 10px;
+  font-weight: 500;
+  transition: color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+  min-width: 0;
+  flex: 1;
+  max-width: 72px;
+}
+.bottom-nav-item svg {
+  width: 22px;
+  height: 22px;
+}
+.bottom-nav-item span {
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.bottom-nav-item.active { color: var(--accent); }
+.bottom-nav-item:active { background: var(--surface-2); }
+
+/* ── Tablet: sidebar mini (640px - 1024px) ── */
+@media (min-width: 640px) and (max-width: 1024px) {
   .sidebar {
-    width: 72px;
-    min-width: 72px;
+    width: 64px;
+    min-width: 64px;
     padding: 16px 8px;
+    align-items: center;
+  }
+  .sidebar-logo {
+    justify-content: center;
+    padding-left: 0;
   }
   .sidebar-logo h1,
   .nav-tab span,
+  .nav-tab .new-chat-icon-btn,
+  .nav-tab .chevron,
+  .session-list,
   .model-selector,
   .cost-dashboard,
-  .sidebar-footer,
-  .session-list {
+  .sidebar-footer {
     display: none;
   }
-  .nav-tab {
-    justify-content: center;
-    padding: 10px;
-  }
-  .chat-messages,
-  .view-header,
-  .chat-input-area {
-    padding-left: 16px !important;
-    padding-right: 16px !important;
-  }
+  .nav-tab { justify-content: center; padding: 10px; }
 }
+
+/* ── Mobile: sidebar drawer + bottom nav (< 640px) ── */
+@media (max-width: 639px) {
+  .mobile-header { display: flex; }
+  .sidebar-backdrop { display: block; }
+
+  .app { padding-top: var(--mobile-header-h); padding-bottom: var(--bottom-nav-h); }
+
+  .sidebar {
+    position: fixed;
+    top: var(--mobile-header-h);
+    left: 0;
+    bottom: var(--bottom-nav-h);
+    width: min(300px, 80vw);
+    min-width: 0;
+    z-index: 45;
+    transform: translateX(-105%);
+    opacity: 0;
+    border-right: 1px solid var(--border);
+    border-top: 1px solid var(--border);
+    box-shadow: 4px 0 24px rgba(0,0,0,0.5);
+  }
+  .sidebar.open {
+    transform: translateX(0);
+    opacity: 1;
+  }
+
+  .bottom-nav { display: flex; }
+
+  /* View headers with less padding on mobile */
+  .view-header {
+    padding: 0 12px;
+    height: 52px;
+  }
+  .view-header-actions .new-chat-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  .chat-messages {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .message { max-width: 90%; }
+  .message-bubble { padding: 10px 14px; }
+
+  /* Hide pony subnav labels, show icons only */
+  .pony-subtab svg { margin-right: 0 !important; }
+  .pony-subtab { justify-content: center; padding: 6px 10px; }
+  .pony-subtab span { display: none; }
+
+  .sidebar-logo { margin-bottom: 20px; }
+}
+
+/* ── Very thin screens (< 380px) ── */
+@media (max-width: 379px) {
+  .message { max-width: 95%; }
+  .bottom-nav-item { max-width: 56px; }
+  .bottom-nav-item svg { width: 18px; height: 18px; }
+}
+
+/* ── Ensure pony sub-view layouts scroll properly ── */
+.pony-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 </style>

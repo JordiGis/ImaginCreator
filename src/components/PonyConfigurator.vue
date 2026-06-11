@@ -470,4 +470,11 @@ function clearAll() {
   .pony-config { flex: 1 1 100%; max-width: 100%; border-right: none; border-bottom: 1px solid var(--border); max-height: 50vh; }
   .pony-output { padding: 16px; }
 }
+
+@media (max-width: 639px) {
+  .pony-config { padding: 12px; max-height: 45vh; }
+  .pony-output { padding: 12px; }
+  .pony-header { flex-wrap: wrap; gap: 6px; }
+  .pony-header h2 { font-size: 14px; }
+}
 </style>

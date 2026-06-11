@@ -519,4 +519,16 @@ watch(() => props.pendingAttachments?.length ?? 0, (newLen, oldLen) => {
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 639px) {
+  .chat-input-area {
+    padding: 10px 12px;
+  }
+  .input-wrap {
+    padding: 6px 10px;
+  }
+  .input-wrap textarea {
+    font-size: 16px; /* prevent iOS zoom */
+  }
+}
 </style>

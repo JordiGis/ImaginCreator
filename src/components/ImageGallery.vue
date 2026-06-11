@@ -188,4 +188,30 @@ onMounted(() => {
 .gallery-item:hover .gallery-prompt {
   opacity: 1;
 }
+
+/* -- Mobile responsive -- */
+@media (max-width: 639px) {
+  .gallery-content {
+    padding: 12px;
+  }
+  .gallery-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 8px;
+  }
+  .loading-skeleton {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  .gallery-prompt {
+    font-size: 11px;
+    padding: 24px 8px 8px;
+  }
+}
+
+@media (max-width: 379px) {
+  .gallery-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+}
 </style>

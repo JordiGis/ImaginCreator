@@ -27,8 +27,16 @@
       <!-- ── Config Panel ── -->
       <div class="char-config">
 
+      <!-- Pose mode indicator -->
+      <div v-if="poseMode" class="pose-mode-banner">
+        <div class="pose-mode-banner-inner">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+          <span>Modo Pose — solo cambias pose, cámara e iluminación</span>
+          <button class="btn-small" @click="exitPoseMode">Salir</button>
+        </div>
+      </div>
       <div
-        v-for="cat in categories"
+        v-for="cat in visibleCategories"
         :key="cat.key"
         :class="['category', { open: !collapsed[cat.key], multi: cat.multi }]"
       >
@@ -65,6 +73,17 @@
       <!-- Model bar -->
       <div class="model-bar">recraft/recraft-v4.1-utility / $0.040/img</div>
 
+      <!-- Reference character image (pose mode) -->
+      <div v-if="poseMode && charImageDataUrl" class="char-reference">
+        <div class="reference-header">
+          <span class="reference-label">Personaje de referencia</span>
+        </div>
+        <div class="reference-content">
+          <img :src="charImageDataUrl" class="reference-thumb" />
+          <span class="reference-hint">La apariencia se mantiene, solo cambia la pose</span>
+        </div>
+      </div>
+
       <!-- Custom text -->
       <textarea
         v-model="customText"
@@ -82,7 +101,7 @@
         </button>
         <button class="btn-primary" @click="generate" :disabled="generating || !composedPrompt.trim()">
           <span v-if="generating" class="spinner"></span>
-          <span v-else>Generar Personaje</span>
+          <span v-else>{{ poseMode ? 'Generar Nueva Pose' : 'Generar Personaje' }}</span>
         </button>
       </div>
 
@@ -105,6 +124,10 @@
             <button class="btn-secondary" @click="sendToChat">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
               Enviar al chat
+            </button>
+            <button v-if="!poseMode" class="btn-secondary" @click="enterPoseMode" :disabled="!result?.imageUrl">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+              Cambiar Pose
             </button>
             <button class="btn-secondary" @click="openInGallery">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
@@ -175,6 +198,10 @@ const generating = ref(false)
 const result = ref(null)
 const copied = ref(false)
 const customText = ref('')
+
+// Pose mode — lock character appearance, change only pose/camera/lighting/expression
+const poseMode = ref(false)
+const charImageDataUrl = ref('')
 
 const collapsed = reactive(
   Object.fromEntries(TRAIT_CATEGORIES.map(c => [c.key, true]))
@@ -309,6 +336,8 @@ function loadSavedConfig() {
         if (saved.collapsed[key] === false) collapsed[key] = false
       }
     }
+    // Restore character reference image
+    if (saved.charImage) charImageDataUrl.value = saved.charImage
   } catch (e) {
     console.warn('Failed to load character config:', e)
   }
@@ -328,6 +357,7 @@ function saveConfig() {
       selections: s,
       customText: customText.value,
       collapsed: { ...collapsed },
+      charImage: charImageDataUrl.value,
     }))
   } catch {}
 }
@@ -375,6 +405,35 @@ function toggleTrait(cat, opt) {
 
 const categories = TRAIT_CATEGORIES
 
+// In pose mode, only show categories that change scene/composition
+const visibleCategories = computed(() => {
+  if (!poseMode.value) return categories
+  return categories.filter(c => ['pose', 'cameraAngle', 'lighting', 'expression'].includes(c.key))
+})
+
+function enterPoseMode() {
+  if (!charImageDataUrl.value) {
+    // Get the raw data URL from the API response
+    const rawDataUrl = result.value?.raw?.images?.[0]?.dataUrl
+    if (rawDataUrl) {
+      charImageDataUrl.value = rawDataUrl
+    } else if (result.value?.imageUrl?.startsWith('data:')) {
+      charImageDataUrl.value = result.value.imageUrl
+    }
+  }
+  if (charImageDataUrl.value) {
+    poseMode.value = true
+    // Collapse all categories, then expand the pose-related ones
+    for (const key of Object.keys(collapsed)) {
+      collapsed[key] = !['pose', 'cameraAngle', 'lighting', 'expression'].includes(key)
+    }
+  }
+}
+
+function exitPoseMode() {
+  poseMode.value = false
+}
+
 const composedPrompt = computed(() => {
   const base = composePrompt(selections)
   const extra = customText.value.trim()
@@ -388,7 +447,8 @@ const composedPrompt = computed(() => {
 })
 
 function randomize() {
-  for (const cat of TRAIT_CATEGORIES) {
+  const cats = poseMode.value ? visibleCategories.value : TRAIT_CATEGORIES
+  for (const cat of cats) {
     if (cat.multi) {
       const shuffled = [...cat.options].sort(() => Math.random() - 0.5)
       const count = Math.floor(Math.random() * Math.min(4, cat.options.length + 1))
@@ -407,15 +467,23 @@ async function generate() {
 
   try {
     const prompt = composedPrompt.value
-    const res = await api.generateImage(prompt, CHAR_MODEL_KEY)
+    // In pose mode, send reference image to preserve appearance
+    const images = poseMode.value && charImageDataUrl.value ? [charImageDataUrl.value] : []
+    const res = await api.generateImage(prompt, CHAR_MODEL_KEY, images)
+    const rawImage = res.images?.[0]
+    const imageUrl = rawImage?.dataUrl || `/img/${rawImage?.file}`
     result.value = {
-      imageUrl: res.images?.[0]?.dataUrl || `/img/${res.images?.[0]?.file}`,
+      imageUrl,
       prompt,
       model: res.model,
       cost: res.cost,
       cached: res.cached,
       tokens: (res.usage?.prompt || 0) + (res.usage?.output || 0),
       raw: res,
+    }
+    // Update character reference image
+    if (rawImage?.dataUrl) {
+      charImageDataUrl.value = rawImage.dataUrl
     }
     credit.addGeneration(res)
   } catch (e) {
@@ -555,6 +623,76 @@ function openInGallery() {
   max-height: 600px;
   padding: 10px 14px;
   visibility: visible;
+}
+
+/* ── Pose Mode Banner ── */
+
+.pose-mode-banner {
+  margin-bottom: 10px;
+}
+
+.pose-mode-banner-inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.pose-mode-banner-inner svg {
+  flex-shrink: 0;
+}
+
+.pose-mode-banner-inner span {
+  flex: 1;
+}
+
+.pose-mode-banner-inner .btn-small {
+  flex-shrink: 0;
+}
+
+/* ── Reference Character (Pose Mode) ── */
+
+.char-reference {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.reference-header {
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.reference-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.reference-thumb {
+  width: 64px;
+  height: 64px;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.reference-hint {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
 }
 
 /* ── Tag Buttons ── */
@@ -806,6 +944,67 @@ function openInGallery() {
   }
   .char-preview {
     padding: 16px;
+  }
+}
+
+@media (max-width: 639px) {
+  .char-config {
+    padding: 12px;
+    max-height: 45vh;
+  }
+  .char-preview {
+    padding: 12px;
+  }
+  .category-body {
+    gap: 4px;
+  }
+  .tag-btn {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+  .char-actions {
+    gap: 8px;
+  }
+  .btn-primary, .btn-secondary {
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+  .char-result {
+    padding: 14px;
+  }
+  .char-result img {
+    max-width: 100%;
+  }
+  .char-result-actions {
+    gap: 8px;
+  }
+  .char-prompt-box {
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+  .btn-small {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+  .preset-select {
+    min-width: 60px;
+    font-size: 11px;
+  }
+  .char-presets {
+    gap: 4px;
+  }
+  .model-bar {
+    font-size: 11px;
+  }
+  .char-free-input {
+    font-size: 12px;
+    padding: 8px 10px;
+  }
+  .char-reference {
+    gap: 8px;
+  }
+  .reference-header {
+    font-size: 12px;
   }
 }
 

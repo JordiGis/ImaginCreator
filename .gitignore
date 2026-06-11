@@ -7,3 +7,4 @@ img_output/
 
 # Keep gitignored dirs but not their content
 img_output/*.png
+data/

@@ -42,10 +42,11 @@ Env vars (auto-loaded from `.env` file in project root):
 │   └── services/
 │       ├── openrouter.js # OpenRouter API client (image gen, multimodal)
 │       ├── storage.js    # Image save, metadata, stats, prompt cache
-│       └── cache.js      # Cache lookup + model config (server-side)
+│       ├── cache.js      # Cache lookup + model config (server-side)
+│       └── characters.js # Character roleplay CRUD (JSON file storage)
 ├── src/
 │   ├── main.js           # Vue app entry
-│   ├── App.vue           # Main layout — sidebar nav + chat + character creator views
+│   ├── App.vue           # Main layout — sidebar nav + chat + character creator + roleplay
 │   ├── config/
 │   │   ├── models.js     # Frontend model definitions (Riverflow, Recraft)
 │   │   └── characterTraits.js  # Character creator trait definitions + prompt compositor
@@ -59,13 +60,17 @@ Env vars (auto-loaded from `.env` file in project root):
 │       ├── CostDashboard.vue       # Stats sidebar panel
 │       ├── ImageModal.vue          # Full-size image preview modal
 │       ├── ImageGallery.vue        # Full-screen gallery (sidebar + grid of all images)
-│       └── CharacterConfigurator.vue  # Trait-based character creator (collapsible categories)
+│       ├── CharacterConfigurator.vue  # Trait-based character creator (collapsible categories)
+│       ├── CharactersView.vue      # Roleplay character gallery + create/edit modal
+│       └── CharacterChat.vue       # Roleplay chat with 3 message modes (💬💭🌍)
+├── data/                 # User data (gitignored)
+│   └── characters.json   # Roleplay character definitions
 ├── img_output/           # Generated images
 │   ├── _metadata.json    # Image records + stats
 │   └── _cache/           # Prompt-hash cache (avoids duplicate API calls)
 ├── dist/                 # Production build output
 ├── index.html            # Vite entry
-├── vite.config.js        # Vite config + proxy (/api, /img → :3030)
+├── vite.config.js        # Vite config + proxy (/api, /img → :3030), LAN host
 ├── package.json
 ├── CLAUDE.md
 └── gen-img.js / img-dash.js  # Legacy single-file versions (kept for reference)
@@ -81,6 +86,12 @@ Env vars (auto-loaded from `.env` file in project root):
 | GET | `/api/stats` | Credit usage + limits |
 | GET | `/api/check-cache?prompt=...&model=...` | Check if prompt is cached |
 | POST | `/api/generate` | Generate image `{prompt, modelKey, images?}` |
+| POST | `/api/translate` | Translate text to English via AI with model fallback |
+| GET | `/api/characters` | List all roleplay characters |
+| POST | `/api/characters` | Create roleplay character `{name, avatar, systemPrompt, greeting}` |
+| PUT | `/api/characters/:id` | Update a roleplay character |
+| DELETE | `/api/characters/:id` | Delete a roleplay character |
+| POST | `/api/characters/chat` | Chat with a character `{characterId, messages[]}` |
 | GET | `/img/:filename` | Serve saved PNG files |
 
 `POST /api/generate` supports multimodal: pass `images` array (base64 data URLs) alongside `prompt` for image-to-image workflows. Cached prompts return `{cached: true}` with stored data URL — no API call.
@@ -111,7 +122,8 @@ Env vars (auto-loaded from `.env` file in project root):
 
 1. **Chat** (default) — prompt input + message history with images inline. Per-model message store via `useChatStore`.
 2. **Character Creator** — trait-based character configurator with collapsible categories, randomize, compose prompt from selections, generate via Recraft V4.1, then send result to chat.
-3. **Gallery** — full-screen image gallery overlay with sidebar stats + grid of all generated images. Loaded from `/api/images`.
+3. **Roleplay** — chatbot character gallery (`CharactersView`) + chat interface (`CharacterChat`). 3 message modes: 💬 speech (quotes), 💭 thoughts (parens), 🌍 narration (asterisks). Uses OpenRouter text models with fallback chain. Characters stored server-side in `data/characters.json`.
+4. **Gallery** — full-screen image gallery overlay with sidebar stats + grid of all generated images. Loaded from `/api/images`.
 
 ## Key Components
 
@@ -132,6 +144,21 @@ Env vars (auto-loaded from `.env` file in project root):
 - `currentModel` synced to URL `?model=` param
 - Actions: `setModel`, `addMessage`, `newChat`, `hasMessages`
 - Messages derived via `computed` from current model's array
+
+### `CharacterChat.vue`
+- 3 message modes: 💬 Decir (speech → `"text"`), 💭 Pensar (thought → `(text)`), 🌍 Narrar (narration → `*text*`)
+- Messages stored per-character in localStorage (`ichar-msg-{id}`)
+- Auto-sends character's greeting on first open
+- Detects AI response format and applies visual styling (colored badge + left border per type)
+- Retry on error, reset conversation, scrolling auto-follow
+- Sends full message history to API for context
+
+### `CharactersView.vue`
+- Grid gallery of character cards with avatar emoji + name
+- Create/edit modal with name, avatar picker, system prompt, greeting
+- Delete with confirmation
+- Loading skeleton (6 cards), empty state with CTA
+- 3 default characters seeded on first launch (Lila hechicera, Kael mercenario, Nyx hacker)
 
 ### `characterTraits.js`
 - `TRAIT_CATEGORIES` — array of category objects with `key`, `label`, `icon`, `options[]`

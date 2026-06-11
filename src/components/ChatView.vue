@@ -443,4 +443,21 @@ onMounted(() => {
   background: rgba(255, 82, 82, 0.1);
   color: #ff5252;
 }
+
+/* -- Mobile responsive -- */
+@media (max-width: 639px) {
+  .history-modal {
+    width: 95%;
+    max-height: 90vh;
+  }
+  .history-modal-header {
+    padding: 12px 16px;
+  }
+  .history-list {
+    padding: 12px 16px;
+  }
+  .history-item {
+    padding: 10px 12px;
+  }
+}
 </style>

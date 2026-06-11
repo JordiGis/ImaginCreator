@@ -1187,4 +1187,47 @@ function previewImage(url) {
     padding-right: 16px !important;
   }
 }
+
+@media (max-width: 639px) {
+  .pony-project-tabs {
+    padding: 6px 10px !important;
+    gap: 4px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .pony-project-tab {
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+  .pony-chat-messages {
+    padding: 12px !important;
+  }
+  .pony-chat-input {
+    padding: 10px 12px !important;
+  }
+  .pony-chat-empty {
+    padding: 24px 16px;
+  }
+  .pony-chat-empty h3 {
+    font-size: 16px;
+  }
+  .pony-chat-empty p {
+    font-size: 13px;
+  }
+  .suggested-prompts {
+    gap: 6px;
+  }
+  .suggested-prompts .suggestion-chip {
+    font-size: 11px;
+    padding: 5px 10px;
+  }
+  .pony-msg-bubble {
+    max-width: 90%;
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+  .pony-msg-row {
+    gap: 8px;
+  }
+}
 </style>

@@ -10,6 +10,14 @@ import { fileURLToPath } from 'node:url'
 import { callApi } from './services/openrouter.js'
 import { saveImage, getAllImages, getStats, updateCost, serveImage } from './services/storage.js'
 import { getModel, getAllModels, checkPromptCache } from './services/cache.js'
+import {
+  getAllCharacters,
+  getCharacter,
+  createCharacter,
+  updateCharacter,
+  deleteCharacter
+} from './services/characters.js'
+import os from 'node:os'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -36,6 +44,8 @@ const KEY = process.env.OPENROUTER_API_KEY || process.env.UPSTREAM_KEY
 const PORT = parseInt(process.env.PORT || '3030', 10)
 const DAILY_LIMIT = parseFloat(process.env.DAILY_LIMIT_USD || '0')
 const WEEKLY_LIMIT = parseFloat(process.env.WEEKLY_LIMIT_USD || '0')
+const PONY_HOST = process.env.PONY_HOST || '127.0.0.1'
+const PONY_PORT = parseInt(process.env.PONY_PORT || '7860', 10)
 
 if (!KEY) {
   console.error('❌ Need OPENROUTER_API_KEY env var')
@@ -43,6 +53,20 @@ if (!KEY) {
 }
 
 // ── Helpers ──
+
+function getLocalIP() {
+  try {
+    const nets = os.networkInterfaces()
+    for (const name of Object.keys(nets)) {
+      for (const net of nets[name]) {
+        if (net.family === 'IPv4' && !net.internal) {
+          return net.address
+        }
+      }
+    }
+  } catch {}
+  return 'localhost'
+}
 
 function json(res, code, data) {
   res.writeHead(code, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
@@ -70,23 +94,31 @@ const TEXT_MODEL_FALLBACKS = [
   'deepseek/deepseek-r1',                      // Free (DeepInfra)
   'qwen/qwq-32b:free',                        // Free (different provider)
   'nousresearch/hermes-3-llama-3.1-70b:free', // Free (different provider)
-  'google/gemini-2.0-flash-001',              // Paid fallback ($0.10/1M tokens)
+  'deepseek/deepseek-v4-flash',               // Paid fallback
 ]
 
 async function callWithFallback(modelList, messages, apiKey) {
   const errors = []
   for (let i = 0; i < modelList.length; i++) {
     try {
-      return await callApi({ model: modelList[i], messages, apiKey })
-    } catch (e) {
-      errors.push({ model: modelList[i], error: e.isRateLimit ? 'rate_limited' : e.message })
-      if (e.isRateLimit) {
+      const result = await callApi({ model: modelList[i], messages, apiKey })
+      // Si el texto viene vacío, también fallback
+      if (!result.text || !result.text.trim()) {
+        errors.push({ model: modelList[i], error: 'empty_response' })
         const nextModel = modelList[i + 1]
-        console.error(`⚠️ 429 on ${modelList[i]}${nextModel ? ` → trying ${nextModel}` : ' — no more fallbacks'}`)
+        console.error(`⚠️ Empty response on ${modelList[i]}${nextModel ? ` → trying ${nextModel}` : ' — no more fallbacks'}`)
         continue
       }
-      // Non-rate-limit error → fail fast
-      throw e
+      return result
+    } catch (e) {
+      const reason = e.isRateLimit ? 'rate_limited' : e.message
+      errors.push({ model: modelList[i], error: reason })
+      const nextModel = modelList[i + 1]
+      console.error(`⚠️ ${reason} on ${modelList[i]}${nextModel ? ` → trying ${nextModel}` : ' — no more fallbacks'}`)
+      if (nextModel) continue
+      // Last model failed too — return last error instead of crashing
+      const summary = errors.map(e => `${e.model}: ${e.error}`).join('; ')
+      throw new Error(`All AI models failed — ${summary}`)
     }
   }
   const summary = errors.map(e => `${e.model}: ${e.error}`).join('; ')
@@ -315,8 +347,8 @@ async function handleRequest(req, res) {
 
       const sdResult = await new Promise((resolve, reject) => {
         const opts = {
-          hostname: '127.0.0.1',
-          port: 7860,
+          hostname: PONY_HOST,
+          port: PONY_PORT,
           path: sdPath,
           method: 'POST',
           headers: {
@@ -432,6 +464,101 @@ REGLAS ADICIONALES:
     }
   }
 
+  // ── Character (roleplay chatbot) routes ──
+
+  // GET /api/characters — list all characters
+  if (method === 'GET' && url.pathname === '/api/characters') {
+    return json(res, 200, { characters: getAllCharacters() })
+  }
+
+  // POST /api/characters — create a character
+  if (method === 'POST' && url.pathname === '/api/characters') {
+    try {
+      const data = await parseBody(req)
+      const character = createCharacter(data)
+      return json(res, 201, { character })
+    } catch (e) {
+      return json(res, 500, { error: String(e) })
+    }
+  }
+
+  // PUT /api/characters/:id — update a character (match /api/characters/<id>)
+  const putMatch = method === 'PUT' && url.pathname.match(/^\/api\/characters\/([a-z0-9]+)$/)
+  if (putMatch) {
+    try {
+      const data = await parseBody(req)
+      const character = updateCharacter(putMatch[1], data)
+      if (!character) return json(res, 404, { error: 'Character not found' })
+      return json(res, 200, { character })
+    } catch (e) {
+      return json(res, 500, { error: String(e) })
+    }
+  }
+
+  // DELETE /api/characters/:id — delete a character
+  const delMatch = method === 'DELETE' && url.pathname.match(/^\/api\/characters\/([a-z0-9]+)$/)
+  if (delMatch) {
+    const ok = deleteCharacter(delMatch[1])
+    if (!ok) return json(res, 404, { error: 'Character not found' })
+    return json(res, 200, { ok: true })
+  }
+
+  // POST /api/characters/chat — chat with a character
+  if (method === 'POST' && url.pathname === '/api/characters/chat') {
+    try {
+      const { characterId, messages } = await parseBody(req)
+      if (!characterId) return json(res, 400, { error: 'characterId required' })
+      if (!messages?.length) return json(res, 400, { error: 'Messages required' })
+
+      const character = getCharacter(characterId)
+      if (!character) return json(res, 404, { error: 'Character not found' })
+
+      const systemContent = `Eres ${character.name}. ${character.systemPrompt}
+
+FORMATO DE RESPUESTA — IMPORTANTE:
+Sigue estas reglas para formatear tus mensajes. DEBES usar estos formatos en CADA respuesta.
+
+1. **Diálogo hablado**: Usa comillas dobles.
+   Ejemplo: "Hola, viajero. ¿Qué te trae por estas tierras?"
+
+2. **Pensamientos internos**: Usa paréntesis. Son pensamientos que el personaje NO dice en voz alta.
+   Ejemplo: (Este forastero tiene mirada de problemas...)
+
+3. **Narración / Entorno**: Usa asteriscos. Describe acciones, el entorno, o lo que ocurre.
+   Ejemplo: *Se recuesta contra la pared y enciende un cigarro lentamente*
+
+PUEDES COMBINARLOS en una misma respuesta. Por ejemplo:
+*Se acerca con pasos cautelosos* "No todos los días vemos visitantes por aquí" *(parece nervioso)*
+
+Mantén las respuestas CONCISAS y NATURALES. 1-3 frases máximo. No hagas parlamentos largos a menos que el contexto lo requiera.
+
+RESPONDE SIEMPRE EN ESPAÑOL, a menos que el usuario hable en otro idioma.`
+
+      const startTime = Date.now()
+
+      const result = await callWithFallback(
+        TEXT_MODEL_FALLBACKS,
+        [
+          { role: 'system', content: systemContent },
+          ...messages
+        ],
+        KEY
+      )
+
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
+
+      return json(res, 200, {
+        text: result.text || '',
+        usage: result.usage,
+        model: result.raw?.model || 'deepseek-chat',
+        elapsed
+      })
+    } catch (e) {
+      console.error('❌ Character chat error:', e)
+      return json(res, 500, { error: String(e) })
+    }
+  }
+
   return json(res, 404, { error: 'Not found' })
 }
 
@@ -439,11 +566,15 @@ REGLAS ADICIONALES:
 
 const server = http.createServer(handleRequest)
 
-server.listen(PORT, () => {
-  console.log(`🎨 ImaginCreator API — http://localhost:${PORT}`)
-  console.log(`   Key: ${KEY.slice(0, 12)}...${KEY.slice(-4)}`)
-  console.log(`   Images: ./img_output/`)
-  console.log(`   Models: ${getAllModels().map((m) => m.label).join(', ')}`)
+const LAN_IP = getLocalIP()
+
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`🎨 ImaginCreator API — corriendo`)
+  console.log(`   Local:    http://localhost:${PORT}`)
+  console.log(`   LAN:      http://${LAN_IP}:${PORT}`)
+  console.log(`   Key:      ${KEY.slice(0, 12)}...${KEY.slice(-4)}`)
+  console.log(`   Images:   ./img_output/`)
+  console.log(`   Models:   ${getAllModels().map((m) => m.label).join(', ')}`)
 })
 
 function isToday(timestamp) {

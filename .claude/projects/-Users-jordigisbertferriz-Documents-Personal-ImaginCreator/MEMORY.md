@@ -1,0 +1,2 @@
+- [Roleplay character chat](roleplay-character-chat.md) — chatbot section with 3-mode chat
+- [Responsive overhaul](responsive-overhaul.md) — Full responsive redesign 3 breakpoints, all views

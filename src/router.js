@@ -1,6 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import ChatView from './components/ChatView.vue'
 import CharacterConfigurator from './components/CharacterConfigurator.vue'
+import CharactersView from './components/CharactersView.vue'
+import CharacterChat from './components/CharacterChat.vue'
 import PonyView from './components/PonyView.vue'
 import ImageGallery from './components/ImageGallery.vue'
 
@@ -9,6 +11,8 @@ const routes = [
   { path: '/chat', component: ChatView, name: 'Chat' },
   { path: '/chat/:id', component: ChatView, name: 'ChatSession' },
   { path: '/character', component: CharacterConfigurator, name: 'Character' },
+  { path: '/characters', component: CharactersView, name: 'Characters' },
+  { path: '/characters/:id', component: CharacterChat, name: 'CharacterChat' },
   {
     path: '/pony',
     component: PonyView,
