@@ -15,8 +15,8 @@
           <span class="char-head-status">{{ generating ? 'escribiendo...' : 'en línea' }}</span>
         </div>
       </div>
-      <button class="header-action-btn" @click="resetChat" title="Nueva conversación">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M14.5 2l3 3-11 11H3v-3.5L14.5 2z"/></svg>
+      <button class="header-action-btn" @click="showDeleteModal = true" title="Borrar conversación">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
       </button>
     </div>
 
@@ -167,6 +167,21 @@
         ></textarea>
       </div>
     </div>
+
+    <!-- Delete confirmation modal -->
+    <Teleport to="body">
+      <div v-if="showDeleteModal" class="modal-overlay" @click.self="showDeleteModal = false">
+        <div class="modal-box">
+          <div class="modal-icon">🗑️</div>
+          <h3 class="modal-title">Borrar conversación</h3>
+          <p class="modal-desc">¿Seguro que quieres borrar toda la conversación? No se puede deshacer.</p>
+          <div class="modal-actions">
+            <button class="modal-btn modal-cancel" @click="showDeleteModal = false">Cancelar</button>
+            <button class="modal-btn modal-confirm" @click="confirmDelete">Borrar</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -184,6 +199,7 @@ const generating = ref(false)
 const error = ref('')
 const generatingSceneImage = ref(false)
 const inputCollapsed = ref(false)
+const showDeleteModal = ref(false)
 const chatRef = ref(null)
 const inputRef = ref(null)
 let msgCounter = 0
@@ -309,24 +325,20 @@ function restoreMessages(charId) {
 }
 
 function resetChat() {
+  if (messages.value.length === 0) return
+  showDeleteModal.value = true
+}
+
+function confirmDelete() {
+  showDeleteModal.value = false
   messages.value = []
   if (character.value?.id) {
     localStorage.removeItem(STORAGE_KEY_PREFIX + character.value.id)
-    if (character.value.greeting) {
-      const detected = detectType(character.value.greeting)
-      messages.value.push({
-        _key: genKey(),
-        role: 'assistant',
-        type: detected.type,
-        content: detected.content,
-        raw: character.value.greeting,
-      })
-      saveMessages(character.value.id)
-    }
   }
   inputText.value = ''
   error.value = ''
   focusInput()
+  scrollBottom()
 }
 
 function scrollBottom(smooth) {
@@ -820,12 +832,14 @@ onMounted(() => {
 }
 
 .seg-narration {
-  color: #ffb347;
+  display: block;
+  color: #4ecdc4;
   font-style: italic;
+  margin-top: 4px;
 }
 
 .msg-row.user .seg-narration {
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(78, 205, 196, 0.9);
 }
 
 /* ── Typing Indicator ── */
@@ -1181,6 +1195,86 @@ onMounted(() => {
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+/* ── Delete Modal ── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.modal-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 28px 32px 20px;
+  max-width: 360px;
+  width: 90%;
+  text-align: center;
+  animation: msgIn 0.2s ease-out;
+}
+
+.modal-icon {
+  font-size: 36px;
+  margin-bottom: 8px;
+  line-height: 1;
+}
+
+.modal-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--fg);
+  margin: 0 0 8px;
+}
+
+.modal-desc {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0 0 24px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.modal-btn {
+  flex: 1;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.modal-cancel {
+  background: var(--surface-2);
+  color: var(--fg);
+  border: 1px solid var(--border);
+}
+
+.modal-cancel:hover {
+  background: var(--surface-3);
+}
+
+.modal-confirm {
+  background: #e53935;
+  color: #fff;
+}
+
+.modal-confirm:hover {
+  background: #c62828;
 }
 
 /* ── Mobile Responsive ── */

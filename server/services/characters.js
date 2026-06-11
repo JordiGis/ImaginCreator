@@ -135,6 +135,15 @@ function migrateDefaults() {
               changed = true
             }
           }
+          // Migrate greeting from old format (*narration* "speech") to new format ([narration] speech (thought))
+          if (existing.greeting && (existing.greeting.includes('*') || existing.greeting.includes('"'))) {
+            const converted = convertGreetingFormat(existing.greeting)
+            if (converted !== existing.greeting) {
+              existing.greeting = converted
+              changed = true
+              console.log(`📜 Migrado saludo de ${def.name} al nuevo formato`)
+            }
+          }
         }
       }
     }
@@ -146,6 +155,18 @@ function migrateDefaults() {
   } catch (e) {
     console.error('⚠️ Error migrating defaults:', e.message)
   }
+}
+
+// Convert old greeting format (*narration* "speech" *(thought)*) to new format ([narration] speech (thought))
+function convertGreetingFormat(greeting) {
+  let g = greeting
+  // Remove * around (thought) — e.g. *(text)* → (text)
+  g = g.replace(/\*\(([^)]*)\)\*/g, '($1)')
+  // Convert *narration* to [narration]
+  g = g.replace(/\*([^*]+)\*/g, '[$1]')
+  // Remove quotes from speech "text" → text
+  g = g.replace(/"([^"]*)"/g, '$1')
+  return g
 }
 
 // Run migration on import
